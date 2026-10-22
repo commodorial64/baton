@@ -1,4 +1,0 @@
-ns math(i a, i b) {
-	functions{
-		add(){return a+b}
-}}

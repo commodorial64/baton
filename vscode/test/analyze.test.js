@@ -57,7 +57,7 @@ test('understands structs, namespaces and their members', () => {
     '    i y',
     '}',
     '',
-    'ns math(i a, i b) -> det {',
+    'ns calc(i a, i b) -> det {',
     '    functions {',
     '        add() { return a + b }',
     '        scale(i k) { return (a + b) * k }',
@@ -74,9 +74,9 @@ test('understands structs, namespaces and their members', () => {
   const point = result.structs.get('Point');
   assert.deepEqual(point.fields.map((field) => field.name), ['x', 'y']);
 
-  const math = result.namespaces.get('math');
-  assert.deepEqual(math.members.map((member) => member.name), ['add', 'scale']);
-  assert.equal(math.members[1].signature, 'fn scale(i a, i b, i k)');
+  const calc = result.namespaces.get('calc');
+  assert.deepEqual(calc.members.map((member) => member.name), ['add', 'scale']);
+  assert.equal(calc.members[1].signature, 'fn scale(i a, i b, i k)');
 
   const atReturn = source.indexOf('return p.x');
   const pType = result.symbols.find((symbol) => symbol.name === 'p' && symbol.kind === 'parameter');
@@ -86,7 +86,7 @@ test('understands structs, namespaces and their members', () => {
   assert.equal(members.source, 'symbols');
   assert.deepEqual(members.entries.map((entry) => entry.name), ['x', 'y']);
 
-  const namespaceMembers = analyze.memberSymbols(result, 'math', atReturn);
+  const namespaceMembers = analyze.memberSymbols(result, 'calc', atReturn);
   assert.deepEqual(namespaceMembers.entries.map((entry) => entry.name), ['add', 'scale']);
 });
 

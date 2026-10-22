@@ -35,7 +35,7 @@ standard namespaces, signature help, an outline, snippets, and diagnostics from
 ```
 cd vscode
 npm run package
-code --install-extension baton-0.1.1.vsix
+code --install-extension baton-0.1.2.vsix
 ```
 
 The extension finds the compiler from the `baton.executable` setting or from
@@ -126,17 +126,34 @@ expect:
 - `<name>.warn` — the program must compile with the listed warnings, and `-W none`
   must silence them
 
+## Standalone binary
+
+Release builds are made with Nuitka from `baton_main.py`, the entry point that
+works without a package-relative import:
+
+```
+python3 -m nuitka --onefile \
+  --output-dir=dist \
+  --output-filename=baton-<version>-linux-x86_64 \
+  --include-data-files=baton-spec.md=baton-spec.md \
+  baton_main.py
+```
+
+The spec is embedded, so the resulting single-file program can still run
+`baton man`. Nuitka output is platform-specific; build it on the platform you
+are releasing for.
+
 ## Packaging
 
-The language ships as a [yapm](https://github.com/commodorial64/yapm) package.
-`packaging/` holds the parts that are yapm-specific: the manifest, the
-launcher that ends up in `/usr/local/bin`, the manual page and the uninstall
-script.
+Baton can also be packaged for
+[yapm](https://github.com/commodorial64/yapm). `packaging/` holds the parts
+that are yapm-specific: the manifest, the launcher that ends up in
+`/usr/local/bin`, the manual page and the uninstall script.
 
 ```
 cd ~/Projects/baton
-python3 packaging/build.py                        # -> dist/baton-0.1.1.yapm
-sudo yapm install dist/baton-0.1.1.yapm
+python3 packaging/build.py                        # -> dist/baton-0.1.2.yapm
+sudo yapm install dist/baton-0.1.2.yapm
 ```
 
 `yapm build` on its own does not work here: it needs the manifest *and* the

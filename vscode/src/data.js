@@ -102,7 +102,7 @@ const KEYWORDS = {
   },
   mod: {
     detail: 'mod',
-    documentation: 'Imports a module: `mod math get-from "lib/math.bt"`. Omit the alias to use the file’s name.'
+    documentation: 'Imports a module: `mod calc get-from "lib/calc.bt"`. Omit the alias to use the file’s name.'
   },
   getfrom: {
     detail: 'get-from',

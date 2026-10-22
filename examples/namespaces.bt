@@ -1,0 +1,12 @@
+ns calc(i a, i b) -> det {
+    functions {
+        add()      { return a + b }
+        scale(i k) { return (a + b) * k }
+    }
+}
+
+fn main() -> i {
+    print(calc.add(5, 5))
+    print(calc.scale(2, 3, 10))
+    return 0
+}

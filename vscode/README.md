@@ -32,7 +32,7 @@ resulting VSIX:
 ```
 cd vscode
 npm run package
-code --install-extension baton-0.1.1.vsix
+code --install-extension baton-0.1.2.vsix
 ```
 
 For development, open the `vscode` directory in VS Code and press `F5` to start

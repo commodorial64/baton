@@ -306,7 +306,7 @@ extern fn rand() -> i
 ## 9. Namespaces
 
 ```
-ns math(i a, i b) -> det {
+ns calc(i a, i b) -> det {
     functions {
         add()      { return a + b -> i }
         subtract() { return a - b }
@@ -317,18 +317,19 @@ ns math(i a, i b) -> det {
     }
 }
 
-print(math.add(5, 5))           -- 10
-print(math.scale(2, 3, 10))     -- 50
+print(calc.add(5, 5))           -- 10
+print(calc.scale(2, 3, 10))     -- 50
 ```
 
 - `ns` declares a namespace. The parameters on the `ns` line are shared by every function inside.
 - Empty `()` inherits those parameters. A function can add its own, which go after the inherited ones (`scale(i k)` is called with `a`, `b`, then `k`).
 - `det` (determined) is a wildcard return type. The compiler works it out from each function's return statement.
-- Functions are called as `math.add(5, 5)`.
-- Compiles to prefixed C functions: `int64_t math_add(int64_t a, int64_t b)`.
+- Functions are called as `calc.add(5, 5)`.
+- Compiles to prefixed C functions: `int64_t calc_add(int64_t a, int64_t b)`.
 - A function that does not fit the shared parameters can be a normal `fn` outside the namespace.
-- The `functions { }` wrapper stays. It marks what belongs to the namespace, and `ns` can also hold `const` members — `math.pi` and `math.e` use that (section 22).
-- A baton namespace and a C `.btl` module are interchangeable: both are called `math.add(1, 2)` (section 19).
+- The `functions { }` wrapper stays. It marks what belongs to the namespace, and `ns` can also hold `const` members — the standard `math.pi` and `math.e` use that (section 22).
+- User namespaces cannot reuse a standard library namespace name such as `math` or `str` (section 22); the examples here use `calc`.
+- A baton namespace and a C `.btl` module are interchangeable: both are called `calc.add(1, 2)` (section 19).
 
 ## 10. Control flow
 
@@ -475,7 +476,7 @@ Functions can be called on a value with a dot:
 i[] local backup = list.clone()
 ```
 
-This works alongside namespaces (`math.add(5, 5)`), since the compiler knows whether the name on the left is a namespace or a variable.
+This works alongside namespaces (`calc.add(5, 5)`), since the compiler knows whether the name on the left is a namespace or a variable.
 
 For v0.1 list operations stay free functions (`push(list, 4)`, `len(list)`). Calling them as methods (`list.push(4)`) is postponed until methods on structs have proven themselves.
 
@@ -487,7 +488,7 @@ struct Point {
     i y
 }
 
-ns math(i a, i b) -> det {
+ns calc(i a, i b) -> det {
     functions {
         add()      { return a + b }
         scale(i k) { return (a + b) * k }
@@ -514,7 +515,7 @@ fn main() -> i {
         total += n
     }
     print("total:", total)                  -- 10
-    print(math.add(5, 5))                  -- 10
+    print(calc.add(5, 5))                  -- 10
 
     if total > 5 and len(backup) == 3 {
         print("ok")
@@ -538,7 +539,7 @@ fn main() -> i {
 | top-level `i local x = f()` | `static int64_t x;`, set by the generated `bt_init()` before `main` |
 | `i local count` | `int64_t count = 0;` |
 | `fn add(i a, i b) -> i` | `int64_t add(int64_t a, int64_t b)` |
-| `math.add(5, 5)` | `math_add(5, 5)` |
+| `calc.add(5, 5)` | `calc_add(5, 5)` |
 | `for i in 0..10` | `for (int64_t i = 0; i < 10; i++)` |
 | `for i in 0..=10` | `for (int64_t i = 0; i <= 10; i++)` |
 | `loop` | `for (;;)` |
@@ -584,25 +585,25 @@ Programs split across files. There are two kinds of module file:
 A module is brought in with one top-level statement:
 
 ```
-mod get-from "lib/math.btl"           -- math.add(1, 2), math.scale(2, 3)
-mod m get-from "lib/math.btl"         -- m.add(1, 2) instead
+mod get-from "lib/calc.btl"           -- calc.add(1, 2), calc.scale(2, 3)
+mod m get-from "lib/calc.btl"         -- m.add(1, 2) instead
 ```
 
 The shape is borrowed from Luau's `local RS = game:GetService("ReplicatedStorage")`: the `mod m` is the `local RS` (the binding), `get-from` is the `game:GetService` (the fetch), and the path is the service name (what identifies the thing being fetched).
 
 - No `local` — just `mod`.
-- **The module's name comes from the file name:** `math.btl` is the module `math`. Nothing after `mod` means "use the file's name".
-- Anything after `mod` is an alias: `mod m get-from "..."` binds `m` and nothing else. The alias only renames the baton-side surface — `m.add(1, 2)` still compiles to `math_add(1, 2)`.
+- **The module's name comes from the file name:** `calc.btl` is the module `calc`. Nothing after `mod` means "use the file's name".
+- Anything after `mod` is an alias: `mod m get-from "..."` binds `m` and nothing else. The alias only renames the baton-side surface — `m.add(1, 2)` still compiles to `calc_add(1, 2)`.
 - Top-level only, file-scoped: visible from the `mod` line to the end of the file, like globals (section 3).
 - Paths are relative to the file doing the importing.
 - Each file is compiled once, no matter how many files import it. Cycles between `.bt` files are a compile error.
 
 ### `.btl` — C modules
 
-- The file name is the C prefix: `math.btl` provides `math_add`, `math_scale`, ... — the exact convention a baton `ns` generates (section 9), so a namespace and a `.btl` are interchangeable: same call syntax, either one can provide it.
+- The file name is the C prefix: `calc.btl` provides `calc_add`, `calc_scale`, ... — the exact convention a baton `ns` generates (section 9), so a namespace and a `.btl` are interchangeable: same call syntax, either one can provide it.
 - The compiler parses the `.btl`'s top-level prototypes whose names start with `<modname>_` and maps C types to baton types: `int64_t` → `i`, `double` → `f`, `bool` → `b`, `char` → `c`, `baton_str` → `s`, `int8_t`..`int32_t` and `uint8_t`..`uint32_t` → `i8`..`i32` / `u8`..`u32`, and pointers as `T *` → `*T` (`int64_t *` → `*i`, `char *` → `*c`).
 - A prototype the compiler cannot map (say `void *` or a library-specific type) is compiled but not callable from baton — not an error, so `.btl` files are free to hold C-only helpers.
-- The generated C starts with `#include "path/to/math.btl"`. One gcc invocation; include guards make repeated imports harmless.
+- The generated C starts with `#include "path/to/calc.btl"`. One gcc invocation; include guards make repeated imports harmless.
 
 ### `.bt` — baton modules, `expose` instead of `return`
 
@@ -611,19 +612,19 @@ Where Luau's module script ends in `return { ... }`, a `.bt` module publishes it
 ```
 fn to_hex(i n) -> s { ... }          -- private helper
 
-ns math(i a, i b) -> det {
+ns calc(i a, i b) -> det {
     functions {
         add() { return a + b }
         hex() { return to_hex(add()) }   -- helper chip in, stays private
     }
 }
 
-expose math
+expose calc
 ```
 
 - `expose` lists what the module publishes — in practice the namespace (a struct or two may join it). It is explicit: everything not listed is private to the file.
-- Private names are still full citizens inside their file: the exposed namespace's functions call `to_hex` freely, the importer gets `math` and never `to_hex`. That is how a module keeps the helpers it wants without dragging them into anyone else's namespace.
-- The file name must match an exposed name: `math.bt` must `expose math`. Importing `lib/math.bt` therefore binds `math` (or the alias, with `mod m get-from ...`).
+- Private names are still full citizens inside their file: the exposed namespace's functions call `to_hex` freely, the importer gets `calc` and never `to_hex`. That is how a module keeps the helpers it wants without dragging them into anyone else's namespace.
+- The file name must match an exposed name: `calc.bt` must `expose calc`. Importing `lib/calc.bt` therefore binds `calc` (or the alias, with `mod m get-from ...`).
 - A module may `expose` something it itself imported, so libraries can layer.
 
 ## 20. Pointers
