@@ -194,8 +194,19 @@ class FnDecl(Stmt):
         self.c_name = None
 
 
+class NamespaceDecl(Stmt):
+    def __init__(self, name, params, ret, functions, constants, line, col, span):
+        self.name = name
+        self.params = params       # shared parameters, in declaration order
+        self.ret = ret             # Ty, or None when the namespace uses `det`
+        self.functions = functions # [FnDecl]
+        self.constants = constants # [VarDecl]
+        self.line, self.col, self.span = line, col, span
+
+
 class Program:
-    def __init__(self, globals_, functions, modules):
+    def __init__(self, globals_, functions, modules, namespaces=None):
         self.globals = globals_      # [VarDecl]
         self.functions = functions   # [FnDecl]
         self.modules = modules       # [str] paths, not implemented yet
+        self.namespaces = namespaces or []

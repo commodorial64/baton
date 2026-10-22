@@ -1,0 +1,24 @@
+ns calc(i a, i b) -> det {
+    i const base = 100
+    functions {
+        add() { return a + b }
+        scale(i k) { return (a + b) * k }
+        offset() { return calc.base + a }
+    }
+}
+
+ns fixed(i a) -> i {
+    functions {
+        twice() { return a * 2 }
+        plus(i b) { return a + b }
+    }
+}
+
+fn main() -> i {
+    print(calc.add(5, 5))
+    print(calc.scale(2, 3, 10))
+    print(calc.base)
+    print(calc.offset(7, 8))
+    print(fixed.twice(4), fixed.plus(4, 6))
+    return 0
+}

@@ -554,23 +554,31 @@ function compilerCandidates(document) {
   const folders = folder ? [folder] : (vscode.workspace.workspaceFolders || []);
   const documentDir = path.dirname(document.uri.fsPath);
   const candidates = [];
+  const workspaceCandidates = [];
 
-  if (configured) {
+  const inspected = typeof configuration.inspect === 'function'
+    ? configuration.inspect('executable')
+    : null;
+  const explicitlyConfigured = !!inspected && [
+    'globalValue', 'workspaceValue', 'workspaceFolderValue', 'languageValue'
+  ].some((key) => inspected[key] !== undefined);
+
+  const configuredCandidate = (() => {
+    if (!configured) return null;
     const parts = splitCommand(configured);
-    if (parts.length) {
-      candidates.push({
-        command: parts[0],
-        args: parts.slice(1),
-        cwd: documentDir,
-        label: configured
-      });
-    }
-  }
+    if (!parts.length) return null;
+    return {
+      command: parts[0],
+      args: parts.slice(1),
+      cwd: documentDir,
+      label: configured
+    };
+  })();
 
   for (const workspaceFolder of folders) {
     const root = workspaceFolder.uri.fsPath;
     if (fs.existsSync(path.join(root, 'baton', '__init__.py'))) {
-      candidates.push({
+      workspaceCandidates.push({
         command: 'python3',
         args: ['-m', 'baton'],
         cwd: root,
@@ -579,7 +587,7 @@ function compilerCandidates(document) {
     }
     const shim = path.join(root, 'bin', 'baton');
     if (fs.existsSync(shim)) {
-      candidates.push({
+      workspaceCandidates.push({
         command: shim,
         args: [],
         cwd: root,
@@ -587,6 +595,12 @@ function compilerCandidates(document) {
       });
     }
   }
+
+  // An explicit setting wins. The default of `baton` should not hide a newer
+  // compiler in the open checkout, so use the workspace one first in that case.
+  if (explicitlyConfigured && configuredCandidate) candidates.push(configuredCandidate);
+  candidates.push(...workspaceCandidates);
+  if (!explicitlyConfigured && configuredCandidate) candidates.push(configuredCandidate);
 
   candidates.push({
     command: 'python3',
@@ -626,6 +640,40 @@ function notifyMissingCompiler() {
       vscode.commands.executeCommand('workbench.action.openSettings', 'baton.executable');
     }
   });
+}
+
+function shellQuote(value) {
+  if (/^[A-Za-z0-9_@%+=:,./-]+$/.test(value)) return value;
+  if (process.platform === 'win32') {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return `'${value.replace(/'/g, "'\\''")}'`;
+}
+
+async function runDocument(document) {
+  if (document.languageId !== LANGUAGE) {
+    vscode.window.showInformationMessage('Open a Baton file first.');
+    return;
+  }
+
+  if (document.isDirty) {
+    const saved = await document.save();
+    if (!saved) return;
+  }
+
+  const compiler = await findCompiler(document);
+  if (!compiler) {
+    notifyMissingCompiler();
+    return;
+  }
+
+  const command = [compiler.command]
+    .concat(compiler.args, ['run', document.uri.fsPath])
+    .map(shellQuote)
+    .join(' ');
+  const terminal = vscode.window.createTerminal({ name: 'Baton', cwd: compiler.cwd });
+  terminal.show(true);
+  terminal.sendText(command, true);
 }
 
 function toDiagnostic(document, item) {
@@ -746,6 +794,15 @@ function activate(context) {
         return;
       }
       await checkDocument(editor.document);
+    }),
+
+    vscode.commands.registerCommand('baton.run', async () => {
+      const editor = vscode.window.activeTextEditor;
+      if (!editor || editor.document.languageId !== LANGUAGE) {
+        vscode.window.showInformationMessage('Open a Baton file first.');
+        return;
+      }
+      await runDocument(editor.document);
     })
   );
 

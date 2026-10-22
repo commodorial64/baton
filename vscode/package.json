@@ -26,7 +26,8 @@
   ],
   "activationEvents": [
     "onLanguage:baton",
-    "onCommand:baton.check"
+    "onCommand:baton.check",
+    "onCommand:baton.run"
   ],
   "main": "./src/extension.js",
   "contributes": {
@@ -60,6 +61,17 @@
       {
         "command": "baton.check",
         "title": "Baton: Check Current File"
+      },
+      {
+        "command": "baton.run",
+        "title": "Baton: Run Current File"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "baton.run",
+        "key": "f5",
+        "when": "editorTextFocus && editorLangId == baton"
       }
     ],
     "configuration": {
@@ -69,7 +81,7 @@
           "type": "string",
           "default": "baton",
           "scope": "resource",
-          "markdownDescription": "Command used to run the Baton compiler, for example `baton` or `python3 -m baton`. When the setting is left at `baton` and the command is not installed, a compiler in the open workspace is used automatically."
+          "markdownDescription": "Command used to run the Baton compiler, for example `baton` or `python3 -m baton`. Setting it explicitly takes precedence; when it is left at the default, a compiler in the open workspace is preferred."
         },
         "baton.diagnostics.run": {
           "type": "string",

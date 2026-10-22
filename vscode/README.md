@@ -19,6 +19,8 @@ needed for diagnostics.
 - **Document outline** (Go to Symbol / breadcrumbs) for functions, structs,
   namespaces, globals and imported modules.
 - **Snippets** for the common declarations and control-flow forms.
+- **Run** the current file with F5 or `Baton: Run Current File`, building and
+  executing it in an integrated terminal.
 - **Diagnostics** from `baton check`, with the compiler's errors and warnings
   shown on the matching source line.
 
@@ -41,10 +43,11 @@ an Extension Development Host with the extension loaded.
 Diagnostics need a working Baton compiler. The extension looks for one in this
 order:
 
-1. The `baton.executable` setting (for example `python3 -m baton`).
+1. `baton.executable`, but only when it has been set explicitly.
 2. `python3 -m baton` in the workspace root, when `baton/__init__.py` is there.
 3. `bin/baton` in the workspace root.
-4. `python3 -m baton` run from the directory of the file being edited.
+4. The default `baton` command on your PATH.
+5. `python3 -m baton` run from the directory of the file being edited.
 
 If none is found, a notification offers to open the setting. Highlighting,
 completion and the other editor features do not need the compiler.
@@ -56,11 +59,21 @@ temporary copy of the document. Nothing is written next to your sources.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `baton.executable` | `baton` | Command used to run the compiler, for example `baton` or `python3 -m baton`. When it is left at the default and `baton` is not installed, the workspace copy is used automatically. |
+| `baton.executable` | `baton` | Command used to run the compiler, for example `baton` or `python3 -m baton`. Setting it explicitly takes precedence; leaving it at the default prefers a compiler in the open workspace. |
 | `baton.diagnostics.run` | `onSave` | When to run `baton check`: `onSave`, `onType` or `off`. |
 
 `Baton: Check Current File` in the command palette runs a check immediately
 regardless of the setting.
+
+## Running
+
+Press F5 while editing a `.bt` file, or run `Baton: Run Current File` from the
+command palette. The file is saved and `baton run` is executed in an integrated
+terminal, so the program's output and exit code appear there.
+
+This is a run command, not breakpoint debugging: Baton does not have a debug
+adapter yet. F5 no longer opens VS Code's "find a debugger" prompt for `.bt`
+files.
 
 ## Tests
 

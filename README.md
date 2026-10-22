@@ -40,8 +40,9 @@ code --install-extension baton-0.1.1.vsix
 
 The extension finds the compiler from the `baton.executable` setting or from
 the open workspace (`python3 -m baton` or `bin/baton`), so a checkout works
-without installing Baton first. Checks run on save by default; set
-`baton.diagnostics.run` to `onType` or `off` to change that. See
+without installing Baton first. Press F5 in a `.bt` file to build and run it in
+a terminal. Checks run on save by default; set `baton.diagnostics.run` to
+`onType` or `off` to change that. See
 [`vscode/README.md`](vscode/README.md) for the details.
 
 ## The specification
@@ -94,10 +95,16 @@ gcc`. Implemented today:
 - **I/O and errors** (specs 17, 18): `print` (spaces between values, floats at
   full precision), `write`, `input`, `panic` with a source line, division-by-zero
   as a runtime error with a source line.
+- **Math** (spec 22): the `math` namespace — `sqrt abs floor ceil round min max
+  sin cos tan atan atan2 pow exp log` and the constants `pi` and `e`. Its
+  members take and return `f`; integer arguments widen automatically.
+- **Namespaces** (spec 9): `ns name(params) -> det { functions { ... } }`, with
+  shared parameters, per-function parameters, const members, and calls such as
+  `name.member(...)`. Namespace functions compile to prefixed C names.
 
 Everything else in the spec — structs, arrays and lists, reference counting,
-methods, `match`, namespaces, modules and `expose`, pointers, generics, multiple
-return values, `extern fn`, the `str`/`math`/`list`/`rand`/`time`/`fs`/`task`
+methods, `match`, modules and `expose`, pointers, generics, multiple return
+values, `extern fn`, and the `str`/`list`/`rand`/`time`/`fs`/`task`
 namespaces — is **not in this build yet**. Where the parser meets one of those
 constructs it stops with a message naming the construct, rather than
 miscompiling it.

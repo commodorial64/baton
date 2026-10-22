@@ -34,6 +34,34 @@ BUILTINS = {
     "fopen": "unimpl",
 }
 
+# Standard-library namespaces that are recognised but not implemented yet.
+_STD_NAMESPACES = ("str", "list", "rand", "time", "fs", "task")
+
+# The math namespace takes f arguments and returns f for every member
+# (specification section 22).  Integers widen to f automatically.
+MATH_MEMBERS = {
+    "sqrt": 1,
+    "abs": 1,
+    "floor": 1,
+    "ceil": 1,
+    "round": 1,
+    "min": 2,
+    "max": 2,
+    "sin": 1,
+    "cos": 1,
+    "tan": 1,
+    "atan": 1,
+    "atan2": 2,
+    "pow": 2,
+    "exp": 1,
+    "log": 1,
+}
+
+STD_CONSTANTS = {
+    "math.pi": T.F,
+    "math.e": T.F,
+}
+
 _RESERVED_C = {
     "abs", "pow", "exit", "time", "printf", "puts", "gets", "scanf", "fgets",
     "strlen", "strcmp", "strcpy", "memcpy", "memset", "malloc", "calloc",
@@ -61,6 +89,9 @@ class Checker:
         self.filename = filename
         self.functions = {}     # name -> [FnDecl]
         self.globals = {}       # name -> Var
+        self.namespaces = {}    # name -> NamespaceDecl
+        self.ns_functions = {}  # "ns.fn" -> [FnDecl]
+        self.ns_constants = {}  # "ns.name" -> Var
         self.scopes = []        # [{name: Var}], innermost last
         self.loops = []         # stack of dicts: {label, breakable, line}
         self.current_fn = None
@@ -71,12 +102,19 @@ class Checker:
         self.collect_top_level()
         for g in self.program.globals:
             self.check_global(g)
+        for ns in self.program.namespaces:
+            self.check_namespace_constants(ns)
+        for ns in self.program.namespaces:
+            for fn in ns.functions:
+                self.check_fn(fn)
         for fn in self.program.functions:
             self.check_fn(fn)
         self.check_main()
         return self.program
 
     def collect_top_level(self):
+        for ns in self.program.namespaces:
+            self.collect_namespace(ns)
         for fn in self.program.functions:
             if fn.name in BUILTINS:
                 self.reporter.error("'%s' is a builtin and cannot be redefined" % fn.name,
@@ -95,6 +133,28 @@ class Checker:
                 existing.append(fn)
             else:
                 self.functions[fn.name] = [fn]
+
+    def collect_namespace(self, ns):
+        if ns.name in ("math",) or ns.name in _STD_NAMESPACES:
+            self.reporter.error("the standard namespace '%s' cannot be redefined" % ns.name,
+                                ns.line, ns.col)
+            return
+        if ns.name in self.namespaces:
+            self.reporter.error("namespace '%s' is already defined" % ns.name,
+                                ns.line, ns.col)
+            return
+        self.namespaces[ns.name] = ns
+        for fn in ns.functions:
+            key = "%s.%s" % (ns.name, fn.name)
+            existing = self.ns_functions.get(key)
+            if existing:
+                if not self.signatures_differ(existing, fn):
+                    self.reporter.error("'%s' is already defined with this signature"
+                                        % key, fn.line, fn.col)
+                    continue
+                existing.append(fn)
+            else:
+                self.ns_functions[key] = [fn]
 
     @staticmethod
     def signatures_differ(existing, fn):
@@ -151,6 +211,34 @@ class Checker:
     @staticmethod
     def is_constant(node):
         return isinstance(node, (IntLit, FloatLit, StrLit, CharLit, BoolLit))
+
+    # -- namespace constants ---------------------------------------------
+    def check_namespace_constants(self, ns):
+        for g in ns.constants:
+            if len(g.names) != 1:
+                self.reporter.error("a namespace constant holds one name", g.line, g.col)
+                continue
+            name = g.names[0]
+            key = "%s.%s" % (ns.name, name)
+            if key in self.ns_constants:
+                self.reporter.error("'%s' is already declared" % key, g.line, g.col)
+                continue
+            if len(g.values) != 1:
+                self.reporter.error("a namespace constant needs one value", g.line, g.col)
+                continue
+            value = g.values[0]
+            self.expr(value)
+            if g.ty is None:
+                g.ty = self.infer_type(value)
+            else:
+                self.assignable(value, g.ty, "'%s'" % key)
+            if not self.is_constant(value):
+                self.reporter.error("a namespace constant needs a constant value",
+                                    g.line, g.col)
+                continue
+            self.ns_constants[key] = Var(g.ty, mutable=False, const=True,
+                                         line=g.line, decl=g)
+            g.inferred_type = g.ty
 
     # -- functions -------------------------------------------------------
     def check_fn(self, fn):
@@ -237,6 +325,14 @@ class Checker:
     def stmt_Assign(self, node):
         targets = []
         for tgt in node.targets:
+            if "." in tgt.name:
+                if tgt.name in STD_CONSTANTS or tgt.name in self.ns_constants:
+                    self.reporter.error("'%s' is a constant and cannot be assigned"
+                                        % tgt.name, tgt.line, tgt.col)
+                else:
+                    self.reporter.error("can only assign to a variable", tgt.line, tgt.col)
+                targets.append(None)
+                continue
             var = self.lookup(tgt.name)
             if var is None:
                 self.reporter.error("'%s' is not declared" % tgt.name, tgt.line, tgt.col)
@@ -344,6 +440,10 @@ class Checker:
                                     node.line, node.col)
             return
         self.expr(node.value)
+        if getattr(self.current_fn, "det_return", False) and ret is None:
+            self.current_fn.ret = node.value.ty
+            self.current_fn.det_return = False
+            return
         if ret is None:
             self.reporter.error("'%s' returns nothing, but a value is given"
                                 % self.current_fn.name, node.line, node.col)
@@ -462,6 +562,30 @@ class Checker:
         node.ty = T.B
 
     def expr_Name(self, node):
+        if "." in node.name:
+            var = self.ns_constants.get(node.name)
+            if var is not None:
+                node.ty = var.ty
+                node.var = var
+                namespace, _, member = node.name.partition(".")
+                node.c_name = "%s_%s" % (namespace, member)
+                return
+            if node.name in STD_CONSTANTS:
+                node.ty = STD_CONSTANTS[node.name]
+                node.std_constant = node.name
+                return
+            namespace, _, member = node.name.partition(".")
+            if namespace in self.namespaces:
+                raise CompileError("'%s' is not a constant in namespace '%s'"
+                                   % (node.name, namespace), node.line, node.col, node.span)
+            if namespace == "math":
+                raise CompileError("'%s' is not a math constant; math has pi and e"
+                                   % node.name, node.line, node.col, node.span)
+            if namespace in _STD_NAMESPACES:
+                raise CompileError("the %s standard namespace is not implemented in this "
+                                   "build yet" % namespace, node.line, node.col, node.span)
+            raise CompileError("'%s' is not a standard library name" % node.name,
+                               node.line, node.col, node.span)
         var = self.lookup(node.name)
         if var is None:
             raise CompileError("'%s' is not declared" % node.name, node.line, node.col, node.span)
@@ -631,6 +755,14 @@ class Checker:
             self.expr(arg)
         name = node.name
 
+        if "." in name:
+            namespace = name.partition(".")[0]
+            if namespace in self.namespaces:
+                node.ty = self.check_ns_call(node)
+            else:
+                node.ty = self.check_std_call(node)
+            return
+
         if name in BUILTINS:
             node.ty = self.check_builtin(node)
             node.builtin = BUILTINS[name]
@@ -679,6 +811,77 @@ class Checker:
             self.assignable(arg, param.ty, "argument")
         node.target = fn
         node.ty = fn.ret if fn.ret is not None else T.VOID
+
+    def check_ns_call(self, node):
+        overloads = self.ns_functions.get(node.name)
+        if not overloads:
+            namespace = node.name.partition(".")[0]
+            raise CompileError("'%s' is not defined in namespace '%s'"
+                               % (node.name, namespace),
+                               node.line, node.col, node.span)
+        matches = []
+        problems = []
+        for fn in overloads:
+            if len(fn.params) != len(node.args):
+                problems.append("%d argument(s)" % len(fn.params))
+                continue
+            ok = True
+            for arg, param in zip(node.args, fn.params):
+                if not (arg.ty == param.ty or T.can_auto_convert(arg.ty, param.ty)
+                        or self._literal_fits(arg, param.ty)):
+                    ok = False
+                    break
+            if ok:
+                matches.append(fn)
+        if not matches:
+            expected = " or ".join(problems) if problems else \
+                " or ".join("(%s)" % ", ".join(p.ty.name for p in fn.params)
+                            for fn in overloads)
+            raise CompileError("'%s' does not take (%s); it takes %s"
+                               % (node.name, ", ".join(a.ty.name for a in node.args),
+                                  expected),
+                               node.line, node.col, node.span)
+        if len(matches) > 1:
+            exact = [fn for fn in matches
+                     if all(a.ty == p.ty for a, p in zip(node.args, fn.params))]
+            if len(exact) == 1:
+                matches = exact
+        if len(matches) > 1:
+            raise CompileError("'%s' is ambiguous for (%s)"
+                               % (node.name, ", ".join(a.ty.name for a in node.args)),
+                               node.line, node.col, node.span)
+        fn = matches[0]
+        for arg, param in zip(node.args, fn.params):
+            self.assignable(arg, param.ty, "argument")
+        node.target = fn
+        node.ty = fn.ret if fn.ret is not None else T.VOID
+        return node.ty
+
+    def check_std_call(self, node):
+        namespace, _, member = node.name.partition(".")
+        if namespace in _STD_NAMESPACES:
+            raise CompileError("the %s standard namespace is not implemented in this "
+                               "build yet" % namespace,
+                               node.line, node.col, node.span)
+        if namespace != "math":
+            raise CompileError("'%s' is not a standard library namespace" % namespace,
+                               node.line, node.col, node.span)
+        if member in STD_CONSTANTS:
+            raise CompileError("'%s' is a constant, not a function" % node.name,
+                               node.line, node.col, node.span)
+        if member not in MATH_MEMBERS:
+            raise CompileError("'%s' is not a math member" % node.name,
+                               node.line, node.col, node.span)
+        arity = MATH_MEMBERS[member]
+        if len(node.args) != arity:
+            raise CompileError("'%s' takes %d argument%s, found %d"
+                               % (node.name, arity, "" if arity == 1 else "s",
+                                  len(node.args)),
+                               node.line, node.col, node.span)
+        for arg in node.args:
+            self.assignable(arg, T.F, "argument to '%s'" % node.name)
+        node.std = ("math", member)
+        return T.F
 
     @staticmethod
     def _literal_fits(arg, ty):

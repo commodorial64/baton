@@ -14,6 +14,19 @@ _ESCAPE_C = {
 
 _CMP_OP = {"==": "==", "!=": "!=", "<": "<", "<=": "<=", ">": ">", ">=": ">="}
 
+_MATH_C = {
+    "sqrt": "sqrt", "abs": "fabs", "floor": "floor", "ceil": "ceil",
+    "round": "round", "min": "fmin", "max": "fmax", "sin": "sin",
+    "cos": "cos", "tan": "tan", "atan": "atan", "atan2": "atan2",
+    "pow": "pow", "exp": "exp", "log": "log",
+}
+
+_MATH_CONSTANTS = {
+    "math.pi": "3.14159265358979323846",
+    "math.e": "2.71828182845904523536",
+}
+
+
 _SIDE_EFFECT_OPS = ("/", "%", "**")
 
 
@@ -106,16 +119,24 @@ class CodeGen:
         self.emit("/* -- program ---------------------------------------------------------- */")
         self.emit()
         self.emit_globals()
+        self.emit_namespace_constants()
         self.emit_prototypes()
         self.emit("static void bt_init(void);")
         self.emit()
         # function bodies
-        for fn in self.program.functions:
+        for fn in self.all_functions():
             self.gen_fn(fn)
             self.emit()
         self.emit_init()
         self.emit_main_wrapper()
         return "\n".join(self.lines) + "\n"
+
+    def all_functions(self):
+        for ns in self.program.namespaces:
+            for fn in ns.functions:
+                yield fn
+        for fn in self.program.functions:
+            yield fn
 
     def prepare_globals(self):
         seen = {}
@@ -137,6 +158,16 @@ class CodeGen:
                 c_name = "%s__%d" % (base, counts[base])
             fn.c_name = c_name
             self.funcs.setdefault(base, []).append(Func(fn, c_name))
+        for ns in self.program.namespaces:
+            ns_counts = {}
+            for fn in ns.functions:
+                base = "%s_%s" % (ns.name, fn.name)
+                ns_counts[base] = ns_counts.get(base, 0) + 1
+                if ns_counts[base] == 1:
+                    c_name = base
+                else:
+                    c_name = "%s__%d" % (base, ns_counts[base])
+                fn.c_name = c_name
 
     def emit_globals(self):
         for name, g in self.globals.items():
@@ -184,9 +215,22 @@ class CodeGen:
         return repr(value)
 
     def emit_prototypes(self):
-        for fn in self.program.functions:
+        for fn in self.all_functions():
             self.emit("%s;" % self.signature(fn))
         self.emit()
+
+    def emit_namespace_constants(self):
+        for ns in self.program.namespaces:
+            emitted = False
+            for g in ns.constants:
+                if len(g.names) != 1 or len(g.values) != 1:
+                    continue
+                name = "%s_%s" % (ns.name, g.names[0])
+                self.emit("static const %s %s = %s;"
+                          % (g.ty.c_name, name, self.const_expr(g.values[0])))
+                emitted = True
+            if emitted:
+                self.emit()
 
     def signature(self, fn):
         params = ", ".join("%s %s" % (p.ty.c_name, p.name) for p in fn.params)
@@ -515,6 +559,11 @@ class CodeGen:
         return "true" if node.value else "false"
 
     def gen_Name(self, node):
+        if getattr(node, "c_name", None):
+            return node.c_name
+        constant = _MATH_CONSTANTS.get(node.name)
+        if constant is not None:
+            return constant
         return node.name
 
     def gen_Unary(self, node):
@@ -561,9 +610,16 @@ class CodeGen:
     def gen_Call(self, node):
         if getattr(node, "builtin", None):
             return self.gen_builtin(node)
+        if getattr(node, "std", None):
+            return self.gen_std_call(node)
         args = ", ".join(self.hoist(a) for a in node.args)
         name = node.target.c_name
         return "%s(%s)" % (name, args)
+
+    def gen_std_call(self, node):
+        _, member = node.std
+        args = ", ".join(self.hoist(a) for a in node.args)
+        return "%s(%s)" % (_MATH_C[member], args)
 
     def hoist(self, node):
         """Evaluate an argument in source order into a temporary.

@@ -3,8 +3,8 @@
 from . import types as T
 from .ast_nodes import (
     Assign, Binary, Block, BoolLit, Break, Call, Cast, CharLit, Continue, ExprStmt,
-    FloatLit, FnDecl, ForRange, If, IntLit, Loop, Name, Param, Program, Return,
-    StrLit, Unary, VarDecl, While,
+    FloatLit, FnDecl, ForRange, If, IntLit, Loop, Name, NamespaceDecl, Param, Program,
+    Return, StrLit, Unary, VarDecl, While,
 )
 from .diagnostics import CompileError
 from .lexer import lex
@@ -13,7 +13,6 @@ from .lexer import lex
 _UNIMPLEMENTED = {
     "struct": "structs (spec 11)",
     "match": "match (spec 10)",
-    "ns": "namespaces (spec 9)",
     "expose": "expose (spec 19)",
     "extern": "extern fn (spec 8)",
 }
@@ -108,12 +107,15 @@ class Parser:
         globals_ = []
         functions = []
         modules = []
+        namespaces = []
         self.skip_newlines()
         while not self.at("EOF"):
             t = self.peek()
             if t.kind == "KW":
                 if t.text == "fn":
                     functions.append(self.parse_fn())
+                elif t.text == "ns":
+                    namespaces.append(self.parse_ns())
                 elif t.text == "mod":
                     modules.append(self.parse_mod())
                 elif t.text in _UNIMPLEMENTED:
@@ -129,7 +131,7 @@ class Parser:
                 raise CompileError("expected a top-level declaration, found %s"
                                    % self._describe(t), t.line, t.col)
             self.skip_newlines()
-        return Program(globals_, functions, modules)
+        return Program(globals_, functions, modules, namespaces)
 
     def parse_mod(self):
         t = self.expect_kw("mod")
@@ -146,6 +148,82 @@ class Parser:
             raise CompileError("expected a quoted module path, found %s" % self._describe(p), p.line, p.col)
         self.next()
         raise CompileError("modules are not implemented in this build yet (spec 19)", t.line, t.col)
+
+    # -- namespaces ------------------------------------------------------
+    def parse_ns(self):
+        start = self.expect_kw("ns")
+        name = self.expect_ident("a namespace name")
+        params = []
+        if self.at("OP", "("):
+            params = self.parse_params()
+        ret = None
+        determined = True
+        if self.accept_op("->"):
+            if self.accept_kw("det"):
+                determined = True
+            else:
+                ret = self.parse_type()
+                determined = False
+        self.expect_op("{", "to open the namespace")
+        self.skip_newlines()
+
+        functions = []
+        constants = []
+        while not self.at("OP", "}"):
+            if self.at("EOF"):
+                raise CompileError("unterminated namespace", start.line, start.col)
+            t = self.peek()
+            if t.kind == "KW" and t.text == "functions":
+                self.next()
+                self.expect_op("{", "to open the functions block")
+                self.skip_newlines()
+                while not self.at("OP", "}"):
+                    if self.at("EOF"):
+                        raise CompileError("unterminated functions block", t.line, t.col)
+                    functions.append(self.parse_ns_fn(name.text, params, ret, determined))
+                    self.skip_newlines()
+                self.expect_op("}", "to close the functions block")
+            elif t.kind == "KW" and t.text == "const":
+                constants.append(self.parse_var_decl())
+            elif t.kind == "IDENT" and T.is_type_name(t.text) and \
+                    self.peek(1).kind == "KW" and self.peek(1).text == "const":
+                constants.append(self.parse_var_decl())
+            elif t.kind == "KW" and t.text == "local":
+                raise CompileError("namespace members must be const", t.line, t.col)
+            elif t.kind == "IDENT" and T.is_type_name(t.text) and \
+                    self.peek(1).kind == "KW" and self.peek(1).text == "local":
+                raise CompileError("namespace members must be const", t.line, t.col)
+            else:
+                raise CompileError("expected 'functions' or 'const' in namespace '%s', found %s"
+                                   % (name.text, self._describe(t)), t.line, t.col)
+            self.skip_newlines()
+
+        end = self.expect_op("}", "to close the namespace")
+        return NamespaceDecl(name.text, params, ret, functions, constants,
+                             start.line, start.col,
+                             max(1, end.off - start.off + 1))
+
+    def parse_ns_fn(self, ns_name, shared, ns_ret, determined):
+        start = self.expect_ident("a namespace function name")
+        own = self.parse_params()
+        ret = ns_ret
+        det = determined and ns_ret is None
+        if self.accept_op("->"):
+            if self.accept_kw("det"):
+                ret = None
+                det = True
+            else:
+                ret = self.parse_type()
+                det = False
+        body = self.parse_block()
+        end = self.toks[self.pos - 1]
+        fn = FnDecl(start.text, list(shared) + own, ret, body,
+                    start.line, start.col,
+                    max(1, end.off - start.off + len(end.text)), len(start.text))
+        fn.namespace = ns_name
+        fn.shared_count = len(shared)
+        fn.det_return = det
+        return fn
 
     # -- functions -------------------------------------------------------
     def parse_fn(self):
@@ -531,7 +609,21 @@ class Parser:
                 end = self.toks[self.pos - 1]
                 span = max(1, end.off - node.off + len(end.text))
                 node = Call(node.name, args, node.line, node.col, span, node.span)
-            elif t.kind == "OP" and t.text in (".", "["):
+            elif t.kind == "OP" and t.text == ".":
+                if not isinstance(node, Name):
+                    raise CompileError("a namespace member must follow a name", t.line, t.col)
+                self.next()
+                member = self.peek()
+                if member.kind != "IDENT":
+                    raise CompileError("expected a namespace member after '.', found %s"
+                                       % self._describe(member), member.line, member.col)
+                self.next()
+                name = "%s.%s" % (node.name, member.text)
+                dotted = Name(name, node.line, node.col,
+                              max(1, member.off + len(member.text) - node.off))
+                dotted.off = node.off
+                node = dotted
+            elif t.kind == "OP" and t.text == "[":
                 raise unimpl("fields, methods and indexing (specs 11-14)",
                              t.line, t.col)
             else:

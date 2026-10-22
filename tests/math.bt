@@ -1,0 +1,10 @@
+fn main() -> i {
+    print(math.sqrt(16))
+    print(math.floor(3.9) as i, math.ceil(3.1) as i, math.round(2.6) as i)
+    print(math.abs(-4.5))
+    print(math.min(2.0, 3.0) as i, math.max(2.0, 3.0) as i)
+    print(math.pow(2.0, 10.0) as i)
+    print(math.atan2(1.0, 1.0) > 0.78)
+    print(math.pi as i, math.e as i)
+    return 0
+}
