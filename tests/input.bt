@@ -1,0 +1,11 @@
+-- input() reads a line, strips the newline, and returns "" at EOF
+fn main() -> i {
+    write("name: ")
+    s local name = input()
+    print("hello,", name)
+    s local rest = input()
+    print("again:", rest)
+    s local eof = input()
+    print("eof empty:", eof == "")
+    return 0
+}

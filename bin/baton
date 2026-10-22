@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+# Shim so `./bin/baton build hello.bt` works from a checkout.
+here=$(cd "$(dirname "$0")/.." && pwd)
+exec python3 -m baton "$@"

@@ -1,0 +1,8 @@
+-- division by zero is a runtime panic with a source line
+fn main() -> i {
+    i local d = 0
+    print("before")
+    i local x = 7 / d
+    print("after", x)
+    return 0
+}

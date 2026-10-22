@@ -1,0 +1,8 @@
+-- narrowing an integer and mixing signed/unsigned both need 'as'
+fn main() -> i {
+    i64 local a = 5
+    i32 local b = a
+    i local c = 3
+    u local d = c
+    return 0
+}

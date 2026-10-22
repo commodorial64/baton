@@ -1,0 +1,2 @@
+error: err_narrow.bt:4: cannot assign i to i32; write 'as i32' to convert
+signed and unsigned cannot be mixed without 'as'

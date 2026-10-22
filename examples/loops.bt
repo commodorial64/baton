@@ -1,0 +1,33 @@
+-- loops, functions, recursion, multiple assignment
+fn fib(i n) -> i {
+    if n < 2 { return n }
+    return fib(n - 1) + fib(n - 2)
+}
+
+fn main() -> i {
+    i local a, b = 0, 1
+    for _ in 0..10 {
+        a, b = b, a + b
+    }
+    print("fib(10) is", a)
+    print("fib(10) again", fib(10))
+
+    i local n = 0
+    while n < 3 {
+        n += 1
+    }
+    print("n is", n)
+
+    loop {
+        n += 1
+        if n > 5 { break }
+    }
+    print("n is", n)
+
+    i local total = 0
+    for i in 10..0 by -2 {
+        total += i
+    }
+    print("total is", total)
+    return 0
+}

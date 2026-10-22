@@ -1,0 +1,7 @@
+fn main() -> i {
+    print("hello, baton")
+    i local x = 5
+    print("x is", x)
+    print("x ** 3 is", x ** 3)
+    return 0
+}

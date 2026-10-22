@@ -1,0 +1,6 @@
+-- undeclared variables and unknown names
+fn main() -> i {
+    x = 5
+    print(nope)
+    return 0
+}

@@ -1,0 +1,11 @@
+# package build output
+dist/
+
+# python caches and virtual environments
+__pycache__/
+*.pyc
+.venv/
+
+# editor extension
+node_modules/
+*.vsix

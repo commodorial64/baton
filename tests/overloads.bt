@@ -1,0 +1,23 @@
+-- function overloads selected on parameter type, plus recursion
+fn area(i x) -> i { return x * x }
+fn area(f x) -> f { return x * x }
+fn area(i w, i h) -> i { return w * h }
+
+fn fact(i n) -> i {
+    if n <= 1 { return 1 }
+    return n * fact(n - 1)
+}
+
+fn fib(i n) -> i {
+    if n < 2 { return n }
+    return fib(n - 1) + fib(n - 2)
+}
+
+fn main() -> i {
+    print(area(4))
+    print(area(2.5))
+    print(area(3, 4))
+    print(fact(5))
+    print(fib(10))
+    return 0
+}

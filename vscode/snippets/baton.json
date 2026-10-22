@@ -1,0 +1,128 @@
+{
+  "Function": {
+    "prefix": "fn",
+    "body": [
+      "fn ${1:name}(${2:i a}) -> ${3:i} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "A baton function"
+  },
+  "Main function": {
+    "prefix": "main",
+    "body": [
+      "fn main() -> i {",
+      "\t$0",
+      "\treturn 0",
+      "}"
+    ],
+    "description": "The entry point"
+  },
+  "Local variable": {
+    "prefix": "local",
+    "body": [
+      "${1:i} local ${2:name} = ${3:0}"
+    ],
+    "description": "A mutable local variable"
+  },
+  "Constant": {
+    "prefix": "const",
+    "body": [
+      "${1:i} const ${2:NAME} = ${3:0}"
+    ],
+    "description": "An immutable constant"
+  },
+  "If": {
+    "prefix": "if",
+    "body": [
+      "if ${1:condition} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "An if block"
+  },
+  "If / elf / else": {
+    "prefix": "ifelse",
+    "body": [
+      "if ${1:condition} {",
+      "\t$2",
+      "} elf ${3:other} {",
+      "\t$4",
+      "} else {",
+      "\t$0",
+      "}"
+    ],
+    "description": "An if / elf / else chain"
+  },
+  "While": {
+    "prefix": "while",
+    "body": [
+      "while ${1:condition} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "A while loop"
+  },
+  "For range": {
+    "prefix": "for",
+    "body": [
+      "for ${1:i} in ${2:0}..${3:10} {",
+      "\t$0",
+      "}"
+    ],
+    "description": "A for loop over a range"
+  },
+  "Loop": {
+    "prefix": "loop",
+    "body": [
+      "loop {",
+      "\t$0",
+      "}"
+    ],
+    "description": "An unconditional loop"
+  },
+  "Match": {
+    "prefix": "match",
+    "body": [
+      "match ${1:value} {",
+      "\t${2:0} { $3 }",
+      "\telse { $0 }",
+      "}"
+    ],
+    "description": "A match expression"
+  },
+  "Struct": {
+    "prefix": "struct",
+    "body": [
+      "struct ${1:Name} {",
+      "\t${2:i} ${3:field}",
+      "}"
+    ],
+    "description": "A struct declaration"
+  },
+  "Namespace": {
+    "prefix": "ns",
+    "body": [
+      "ns ${1:name}(${2:i a}, ${3:i b}) -> ${4:det} {",
+      "\tfunctions {",
+      "\t\t${5:add}() { return $0 }",
+      "\t}",
+      "}"
+    ],
+    "description": "A namespace"
+  },
+  "Extern function": {
+    "prefix": "extern",
+    "body": [
+      "extern fn ${1:puts}(${2:s value}) -> ${3:i}"
+    ],
+    "description": "A declaration for a C function"
+  },
+  "Module import": {
+    "prefix": "mod",
+    "body": [
+      "mod ${1:alias} get-from \"${2:lib/name.bt}\""
+    ],
+    "description": "Import a baton or C module"
+  }
+}

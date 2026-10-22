@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+"""baton — the command line compiler, as installed by the yapm package.
+
+yapm unpacks the package into /var/lib/yapm/packages and symlinks this
+script into /usr/local/bin, so the compiler is imported from the copy that
+lives next to this file rather than from anywhere on the system path.
+"""
+
+import os
+import sys
+
+HERE = os.path.dirname(os.path.realpath(__file__))
+ROOT = os.path.dirname(HERE)
+
+sys.path.insert(0, os.path.join(ROOT, "lib"))
+
+# the specification ships with the package, so `baton man` finds it
+SPEC = os.path.join(ROOT, "share", "baton", "baton-spec.md")
+if os.path.isfile(SPEC):
+    os.environ.setdefault("BATON_SPEC", SPEC)
+
+from baton.cli import main
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

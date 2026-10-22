@@ -1,0 +1,12 @@
+-- loop labels
+fn main() -> i {
+    outer: for i in 0..3 {
+        for j in 0..3 {
+            if j == 2 { continue outer }
+            if i == 2 { break outer }
+            print(i, j)
+        }
+    }
+    print("done")
+    return 0
+}

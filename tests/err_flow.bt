@@ -1,0 +1,10 @@
+-- return type mismatch and jump outside a loop
+fn f() -> i {
+    return "no"
+}
+
+fn main() -> i {
+    break
+    continue
+    return 0
+}

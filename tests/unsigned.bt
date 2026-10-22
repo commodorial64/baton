@@ -1,0 +1,18 @@
+-- unsigned arithmetic and wide integer types
+fn main() -> i {
+    u8 local a = 255
+    u16 local b = 65535
+    u32 local c = 4000000000
+    u64 local d = 18000000000000000000
+    print(a, b, c, d)
+
+    i8 local e = -128
+    i16 local f = -32768
+    i32 local g = -2000000000
+    print(e, f, g)
+
+    print(a + 1)
+    u64 local big = 1000000000000
+    print(big * 2)
+    return 0
+}

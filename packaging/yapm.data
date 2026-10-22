@@ -1,0 +1,34 @@
+// YAPM Package Definition File
+// Similar to a Debian CONTROL file or Arch PKGBUILD.
+// Lines starting with // are comments. /* ... */ for multi-line comments.
+
+[METADATA]
+// ─── REQUIRED ──────────────────────────────────────────────
+
+name = "baton"
+version = "0.1.1"
+description = "A statically typed language that compiles to C and builds with gcc."
+author = "commodore"
+license = "MIT"
+
+// ─── OPTIONAL ──────────────────────────────────────────────
+
+// Dependencies: other packages that must be installed first.
+// "python" is a virtual provider — the system python3 is used.
+// gcc is needed to build .bt programs, but is left to the system package
+// manager so a second copy is not dragged in.
+dependencies = ["python"]
+
+[CONTENT]
+// ─── RECOMMENDED ──────────────────────────────────────────
+
+Uninstall = uninstall.sh
+
+// ─── OPTIONAL ──────────────────────────────────────────────
+
+RunFile = run/baton
+
+[FILES]
+// ─── OPTIONAL ──────────────────────────────────────────────
+
+"man/baton.1" = "/usr/share/man/man1/baton.1"

@@ -1,0 +1,31 @@
+-- globals, constants, multi-declare and multi-assign
+i local g_limit = 100
+i local g_count = 0
+i const MAX = 7
+
+fn bump() -> i {
+    g_count += 1
+    return g_count
+}
+
+fn main() -> i {
+    print(g_limit, MAX)
+    print(bump(), bump(), g_count)
+
+    i local a = 1
+    i local b = 2
+    i local c = 3
+    a, b, c = c, a, b
+    print(a, b, c)
+
+    i local p, q
+    p, q = 9, 8
+    print(p, q)
+
+    {
+        i local a = 99
+        print(a)
+    }
+    print(a)
+    return 0
+}

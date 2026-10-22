@@ -1,0 +1,9 @@
+-- missing type prefixes produce the spec's inference warning
+fn main() -> i {
+    local x = 5
+    local name = "baton"
+    local ratio = 1.5
+    local flag = true
+    print(x, name, ratio, flag)
+    return 0
+}

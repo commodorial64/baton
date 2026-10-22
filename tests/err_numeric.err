@@ -1,0 +1,2 @@
+error: err_numeric.bt:3: 256 does not fit in u8 (its range is 0 to 255)
+error: err_numeric.bt:6: '-' cannot mix i and u

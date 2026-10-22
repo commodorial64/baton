@@ -1,0 +1,22 @@
+-- conversions, widening, and the to* builtins
+fn main() -> i {
+    i8 local a = 100
+    i64 local b = a
+    print(b)
+
+    u8 local c = 200
+    print(c + 0)
+
+    f local d = 3.5
+    f32 local e = d as f32
+    print(e)
+
+    print(65 as c)
+    print('A' as i)
+    print(toi("42") + 1)
+    print(tof("2.5") * 2.0)
+    print(tos(7) + "!")
+    print(tob("true"), tob("no"))
+    print(3 as f)
+    return 0
+}

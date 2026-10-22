@@ -1,0 +1,353 @@
+{
+  "name": "Baton",
+  "scopeName": "source.baton",
+  "patterns": [
+    {
+      "include": "#declarations"
+    },
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#chars"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#labels"
+    },
+    {
+      "include": "#types"
+    },
+    {
+      "include": "#namespace-members"
+    },
+    {
+      "include": "#builtins"
+    },
+    {
+      "include": "#calls"
+    },
+    {
+      "include": "#operators"
+    },
+    {
+      "include": "#punctuation"
+    }
+  ],
+  "repository": {
+    "declarations": {
+      "patterns": [
+        {
+          "name": "meta.function.baton",
+          "match": "\\b(fn)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.other.fn.baton"
+            },
+            "2": {
+              "name": "entity.name.function.baton"
+            }
+          }
+        },
+        {
+          "name": "meta.function.extern.baton",
+          "match": "\\b(extern)\\s+(fn)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.other.extern.baton"
+            },
+            "2": {
+              "name": "keyword.other.fn.baton"
+            },
+            "3": {
+              "name": "entity.name.function.baton"
+            }
+          }
+        },
+        {
+          "name": "meta.struct.baton",
+          "match": "\\b(struct)\\s+([A-Z][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.other.struct.baton"
+            },
+            "2": {
+              "name": "entity.name.type.baton"
+            }
+          }
+        },
+        {
+          "name": "meta.namespace.baton",
+          "match": "\\b(ns)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.other.ns.baton"
+            },
+            "2": {
+              "name": "entity.name.namespace.baton"
+            }
+          }
+        },
+        {
+          "name": "meta.module.baton",
+          "match": "\\b(mod)(?:\\s+([A-Za-z_][A-Za-z0-9_]*))?\\s+(get-from)\\s+(\"(?:[^\"\\\\]|\\\\.)*\")",
+          "captures": {
+            "1": {
+              "name": "keyword.other.mod.baton"
+            },
+            "2": {
+              "name": "entity.name.namespace.baton"
+            },
+            "3": {
+              "name": "keyword.control.import.baton"
+            },
+            "4": {
+              "name": "string.quoted.double.path.baton"
+            }
+          }
+        }
+      ]
+    },
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-dash.baton",
+          "match": "--.*$"
+        },
+        {
+          "name": "comment.block.baton",
+          "begin": "-/",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.begin.baton"
+            }
+          },
+          "end": "/-",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.end.baton"
+            }
+          }
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.baton",
+          "begin": "\"",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.begin.baton"
+            }
+          },
+          "end": "\"",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.string.end.baton"
+            }
+          },
+          "patterns": [
+            {
+              "name": "constant.character.escape.baton",
+              "match": "\\\\x[0-9A-Fa-f]{2}|\\\\[ntr\\\\\"'0]"
+            }
+          ]
+        }
+      ]
+    },
+    "chars": {
+      "patterns": [
+        {
+          "name": "string.quoted.single.baton",
+          "begin": "'",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.char.begin.baton"
+            }
+          },
+          "end": "'",
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.char.end.baton"
+            }
+          },
+          "patterns": [
+            {
+              "name": "constant.character.escape.baton",
+              "match": "\\\\x[0-9A-Fa-f]{2}|\\\\[ntr\\\\\"'0]"
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.baton",
+          "match": "\\b\\d(?:_?\\d)*(?:\\.(?:_?\\d)+)(?:[eE][+-]?\\d+)?\\b|\\b\\d(?:_?\\d)*[eE][+-]?\\d+\\b"
+        },
+        {
+          "name": "constant.numeric.integer.hex.baton",
+          "match": "\\b0[xX][0-9A-Fa-f](?:_?[0-9A-Fa-f])*\\b"
+        },
+        {
+          "name": "constant.numeric.integer.octal.baton",
+          "match": "\\b0[oO][0-7](?:_?[0-7])*\\b"
+        },
+        {
+          "name": "constant.numeric.integer.binary.baton",
+          "match": "\\b0[bB][01](?:_?[01])*\\b"
+        },
+        {
+          "name": "constant.numeric.integer.baton",
+          "match": "\\b\\d(?:_?\\d)*\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.baton",
+          "match": "\\b(if|elf|else|while|for|in|by|loop|break|continue|return|match)\\b"
+        },
+        {
+          "name": "keyword.other.declaration.baton",
+          "match": "\\b(local|const|fn|ns|functions|struct|mod|expose|extern|det)\\b"
+        },
+        {
+          "name": "keyword.operator.logical.baton",
+          "match": "\\b(and|or|not)\\b"
+        },
+        {
+          "name": "keyword.operator.cast.baton",
+          "match": "\\bas\\b"
+        },
+        {
+          "name": "keyword.control.import.baton",
+          "match": "\\bget-from\\b"
+        },
+        {
+          "name": "constant.language.baton",
+          "match": "\\b(true|false)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.baton",
+          "match": "\\b(?:i8|i16|i32|i64|u8|u16|u32|u64|i|u|f32|f|b|c|s)\\b"
+        },
+        {
+          "name": "entity.name.type.baton",
+          "match": "\\b[A-Z][A-Za-z0-9_]*(?=\\s+(?:local|const)\\b)"
+        },
+        {
+          "name": "entity.name.type.baton",
+          "match": "\\b[A-Z][A-Za-z0-9_]*(?=\\s+[a-z_][A-Za-z0-9_]*\\s*[,)])"
+        },
+        {
+          "name": "entity.name.type.baton",
+          "match": "\\b[A-Z][A-Za-z0-9_]*(?=\\s*<)"
+        }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.baton",
+          "match": "\\b(print|write|input|panic|toi|tof|tos|tob|tryi|tryf|len|push|pop|clone|isnull|cstr|alloc|free|fopen|readfile|writefile)\\b(?=\\s*\\()"
+        },
+        {
+          "name": "support.class.baton",
+          "match": "\\b(math|str|list|rand|time|fs|task)\\b"
+        }
+      ]
+    },
+    "namespace-members": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.baton",
+          "match": "\\b(math|str|list|rand|time|fs|task)\\.([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "support.class.baton"
+            },
+            "2": {
+              "name": "support.function.builtin.baton"
+            }
+          }
+        }
+      ]
+    },
+    "calls": {
+      "patterns": [
+        {
+          "name": "variable.function.baton",
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*\\()"
+        }
+      ]
+    },
+    "labels": {
+      "patterns": [
+        {
+          "name": "entity.name.label.baton",
+          "match": "^[ \\t]*([A-Za-z_][A-Za-z0-9_]*)(?=\\s*:)"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.range.baton",
+          "match": "\\.\\.=?|\\*\\*="
+        },
+        {
+          "name": "keyword.operator.assignment.baton",
+          "match": "(?:<<=|>>=)|(?:\\+=|-=|\\*=|/=|%=)|(?:=)"
+        },
+        {
+          "name": "keyword.operator.comparison.baton",
+          "match": "==|!=|<=|>=|<|>"
+        },
+        {
+          "name": "keyword.operator.bitwise.baton",
+          "match": "<<|>>|&|\\||\\^|~"
+        },
+        {
+          "name": "keyword.operator.arithmetic.baton",
+          "match": "\\*\\*|[+\\-*/%]"
+        },
+        {
+          "name": "keyword.operator.logical.baton",
+          "match": "!"
+        },
+        {
+          "name": "punctuation.separator.return-type.baton",
+          "match": "->"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.accessor.baton",
+          "match": "\\."
+        },
+        {
+          "name": "punctuation.baton",
+          "match": "[{}\\[\\](),;:]"
+        }
+      ]
+    }
+  }
+}

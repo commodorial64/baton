@@ -1,0 +1,23 @@
+-- range forms and negative steps
+fn main() -> i {
+    i local total = 0
+    for i in 0..5 { total += i }
+    print(total)
+
+    i local incl = 0
+    for i in 0..=5 { incl += i }
+    print(incl)
+
+    i local down = 0
+    for i in 5..0 by -1 { down = down * 10 + i }
+    print(down)
+
+    i local step = 0
+    for i in 0..10 by 3 { step += i }
+    print(step)
+
+    i local empty = 0
+    for i in 5..0 { empty += 1 }
+    print(empty)
+    return 0
+}

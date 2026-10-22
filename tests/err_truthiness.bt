@@ -1,0 +1,6 @@
+-- conditions must be bool, no truthiness
+fn main() -> i {
+    if 1 { print("no") }
+    while "x" { print("no") }
+    return 0
+}

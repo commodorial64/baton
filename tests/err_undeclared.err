@@ -1,0 +1,2 @@
+error: err_undeclared.bt:3: 'x' is not declared
+error: err_undeclared.bt:4: 'nope' is not declared

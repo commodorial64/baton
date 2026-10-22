@@ -1,0 +1,15 @@
+-- fizzbuzz: for ranges, %, if/elf/else
+fn main() -> i {
+    for n in 1..=20 {
+        if n % 15 == 0 {
+            print("fizzbuzz")
+        } elf n % 3 == 0 {
+            print("fizz")
+        } elf n % 5 == 0 {
+            print("buzz")
+        } else {
+            print(n)
+        }
+    }
+    return 0
+}

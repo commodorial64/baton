@@ -1,0 +1,79 @@
+.TH BATON 1 "October 2026" "baton 0.1.1" "User Commands"
+.SH NAME
+baton \- compile and run programs written in the baton language
+.SH SYNOPSIS
+.B baton
+.I command
+.RI [ file .bt ]
+.RI [ options ]
+.SH DESCRIPTION
+.B baton
+compiles the baton language to C and builds the result with gcc. Baton is a
+statically typed, general-purpose, low-level language; the language itself is
+defined in
+.BR baton-spec.md ,
+which ships with this package and can be read with
+.BR "baton man" .
+.PP
+Every command that takes a
+.I file.bt
+argument compiles that file to C, writes the C next to it, and calls gcc.
+.SH COMMANDS
+.TP
+.BI build " file.bt"
+Compile to C, then gcc to a binary.
+.TP
+.BI run " file.bt"
+Build and run.
+.TP
+.BI check " file.bt"
+Stop after type checking; no C is written and gcc is not called.
+.TP
+.BI man " [section]"
+Show the language specification. The section can be a number or part of a
+title, so
+.B man 13
+shows "Memory management" and
+.B man memory
+finds it too. The specification is written in Markdown, but it is rendered as
+plain text for the terminal.
+.SH OPTIONS
+.TP
+.BI \-o " file"
+Output binary path (default: the source name without .bt).
+.TP
+.BI \-W " none|error"
+Silence warnings, or promote them to errors.
+.TP
+.B \-\-emit\-c
+With build: write the C and stop before gcc.
+.TP
+.B \-\-list
+With man: list the spec sections and stop.
+.TP
+.B \-\-raw
+With man: print the specification as Markdown instead of as text.
+.TP
+.B \-\-no\-pager
+With man: write the spec straight to stdout.
+.SH FILES
+.TP
+.I /usr/share/man/man1/baton.1
+This manual page.
+.TP
+.I /var/lib/yapm/packages/baton
+The compiler itself: the python package, the specification and the examples.
+.SH ENVIRONMENT
+.TP
+.B BATON_SPEC
+Path of the specification file to read. The package sets it, so that
+.B baton man
+finds the specification.
+.SH EXAMPLES
+.nf
+baton run examples/hello.bt
+baton build hello.bt -o hello -W error
+baton man 7
+.fi
+.SH SEE ALSO
+.BR gcc (1)

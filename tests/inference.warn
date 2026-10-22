@@ -1,0 +1,4 @@
+warning: inference.bt:3: no type prefix on 'x', inferred 'i' (int)
+warning: inference.bt:4: no type prefix on 'name', inferred 's' (string)
+warning: inference.bt:5: no type prefix on 'ratio', inferred 'f' (float)
+warning: inference.bt:6: no type prefix on 'flag', inferred 'b' (bool)

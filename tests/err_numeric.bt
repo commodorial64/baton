@@ -1,0 +1,8 @@
+-- literal out of range and mixed signed/unsigned
+fn main() -> i {
+    u8 local d = 256
+    i64 local a = 5
+    u64 local b = 3
+    local c = a - b
+    return 0
+}

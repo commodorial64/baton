@@ -1,0 +1,32 @@
+-- control flow: if/elf/else, while, loop, nested
+fn classify(i n) -> s {
+    if n < 0 { return "negative" }
+    elf n == 0 { return "zero" }
+    elf n < 10 { return "small" }
+    else { return "big" }
+}
+
+fn main() -> i {
+    print(classify(-5), classify(0), classify(3), classify(99))
+
+    i local n = 0
+    while n < 3 {
+        print("while", n)
+        n += 1
+    }
+
+    i local m = 0
+    loop {
+        m += 1
+        if m == 3 { break }
+    }
+    print("loop", m)
+
+    for i in 0..3 {
+        for j in 0..3 {
+            if j == 1 { continue }
+            print(i, j)
+        }
+    }
+    return 0
+}

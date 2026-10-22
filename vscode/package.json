@@ -1,0 +1,82 @@
+{
+  "name": "baton",
+  "displayName": "Baton",
+  "description": "Baton language support: syntax highlighting, IntelliSense, signature help and compiler diagnostics.",
+  "version": "0.1.1",
+  "publisher": "baton-language",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "keywords": [
+    "baton",
+    "multi-root ready"
+  ],
+  "activationEvents": [
+    "onLanguage:baton",
+    "onCommand:baton.check"
+  ],
+  "main": "./src/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "baton",
+        "aliases": [
+          "Baton",
+          "baton"
+        ],
+        "extensions": [
+          ".bt"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "baton",
+        "scopeName": "source.baton",
+        "path": "./syntaxes/baton.tmLanguage.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "baton",
+        "path": "./snippets/baton.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "baton.check",
+        "title": "Baton: Check Current File"
+      }
+    ],
+    "configuration": {
+      "title": "Baton",
+      "properties": {
+        "baton.executable": {
+          "type": "string",
+          "default": "baton",
+          "scope": "resource",
+          "markdownDescription": "Command used to run the Baton compiler, for example `baton` or `python3 -m baton`. When the setting is left at `baton` and the command is not installed, a compiler in the open workspace is used automatically."
+        },
+        "baton.diagnostics.run": {
+          "type": "string",
+          "enum": [
+            "onSave",
+            "onType",
+            "off"
+          ],
+          "default": "onSave",
+          "scope": "resource",
+          "markdownDescription": "When to run `baton check` and publish its errors and warnings as diagnostics."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "package": "npx --yes @vscode/vsce package --allow-missing-repository"
+  }
+}

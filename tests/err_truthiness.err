@@ -1,0 +1,2 @@
+error: err_truthiness.bt:3: 'if' condition must be b, found int
+error: err_truthiness.bt:4: 'while' condition must be b, found s

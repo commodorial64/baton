@@ -1,0 +1,12 @@
+-- string comparison, ordering and join
+fn main() -> i {
+    s local a = "abc"
+    s local b = "abd"
+    print(a == a, a == b, a != b)
+    print(a < b, b > a, a <= a, a >= b)
+    print("foo" + "bar")
+    s local greeting = "hello, " + "world"
+    print(greeting)
+    print(a + "!" == "abc!")
+    return 0
+}
