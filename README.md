@@ -172,4 +172,8 @@ bin/baton         shim so ./bin/baton works from a checkout
 vscode/           the VS Code extension: grammar, providers, diagnostics
 packaging/        the yapm package: manifest, launcher, man page
 ```
+
+## License
+
+MIT. See [`LICENSE`](LICENSE).
 # baton

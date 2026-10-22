@@ -4,6 +4,16 @@
   "description": "Baton language support: syntax highlighting, IntelliSense, signature help and compiler diagnostics.",
   "version": "0.1.1",
   "publisher": "baton-language",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/commodorial64/baton.git",
+    "directory": "vscode"
+  },
+  "homepage": "https://github.com/commodorial64/baton#readme",
+  "bugs": {
+    "url": "https://github.com/commodorial64/baton/issues"
+  },
   "engines": {
     "vscode": "^1.75.0"
   },
@@ -77,6 +87,6 @@
   },
   "scripts": {
     "test": "node --test test/*.test.js",
-    "package": "npx --yes @vscode/vsce package --allow-missing-repository"
+    "package": "npx --yes @vscode/vsce package"
   }
 }
