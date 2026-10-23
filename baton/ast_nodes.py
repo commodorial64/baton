@@ -58,6 +58,18 @@ class Unary(Expr):
         self.line, self.col, self.span = line, col, span
 
 
+class AddrOf(Expr):
+    def __init__(self, operand, line, col, span):
+        self.operand = operand
+        self.line, self.col, self.span = line, col, span
+
+
+class Deref(Expr):
+    def __init__(self, operand, line, col, span):
+        self.operand = operand
+        self.line, self.col, self.span = line, col, span
+
+
 class Binary(Expr):
     def __init__(self, op, left, right, line, col, span):
         self.op = op
@@ -74,10 +86,50 @@ class Cast(Expr):
 
 
 class Call(Expr):
-    def __init__(self, name, args, line, col, span, name_span=1):
+    def __init__(self, name, args, line, col, span, name_span=1, type_args=None):
         self.name = name
         self.args = args
         self.name_span = name_span
+        self.type_args = type_args or []
+        self.line, self.col, self.span = line, col, span
+
+
+class Member(Expr):
+    """``obj.field``.  The checker turns this into a field or method access."""
+
+    def __init__(self, obj, name, line, col, span):
+        self.obj = obj
+        self.name = name
+        self.line, self.col, self.span = line, col, span
+
+
+class MethodCall(Expr):
+    def __init__(self, obj, name, args, line, col, span):
+        self.obj = obj
+        self.name = name
+        self.args = args
+        self.line, self.col, self.span = line, col, span
+
+
+class Index(Expr):
+    def __init__(self, obj, index, line, col, span):
+        self.obj = obj
+        self.index = index
+        self.line, self.col, self.span = line, col, span
+
+
+class Slice(Expr):
+    def __init__(self, obj, start, end, inclusive, line, col, span):
+        self.obj = obj
+        self.start = start
+        self.end = end
+        self.inclusive = inclusive
+        self.line, self.col, self.span = line, col, span
+
+
+class BraceLit(Expr):
+    def __init__(self, entries, line, col, span):
+        self.entries = entries  # [(name or None, Expr)]
         self.line, self.col, self.span = line, col, span
 
 
@@ -88,8 +140,9 @@ class Stmt(Node):
 
 class VarDecl(Stmt):
     def __init__(self, ty, names, values, is_const, line, col, span,
-                 inferred=False, name_spans=None, init_spans=None):
+                 inferred=False, name_spans=None, init_spans=None, tys=None):
         self.ty = ty
+        self.tys = tys or [ty] * len(names)
         self.names = names
         self.values = values
         self.is_const = is_const
@@ -149,6 +202,18 @@ class ForRange(Stmt):
         self.var_ty = None
 
 
+class ForEach(Stmt):
+    def __init__(self, index_var, value_var, iterable, body, label, line, col, span):
+        self.index_var = index_var   # str or None
+        self.value_var = value_var
+        self.iterable = iterable
+        self.body = body
+        self.label = label
+        self.line, self.col, self.span = line, col, span
+        self.loop_id = None
+        self.value_ty = None
+
+
 class Loop(Stmt):
     def __init__(self, body, label, line, col, span):
         self.body = body
@@ -170,9 +235,32 @@ class Continue(Stmt):
 
 
 class Return(Stmt):
-    def __init__(self, value, line, col, span):
+    def __init__(self, value, line, col, span, values=None):
         self.value = value
+        self.values = values if values is not None else ([value] if value is not None else [])
         self.line, self.col, self.span = line, col, span
+
+
+class MatchArm:
+    def __init__(self, patterns, body, line, col):
+        self.patterns = patterns  # [Expr] or None for else
+        self.body = body
+        self.line, self.col = line, col
+
+
+class Match(Stmt):
+    def __init__(self, subject, arms, line, col, span):
+        self.subject = subject
+        self.arms = arms
+        self.line, self.col, self.span = line, col, span
+
+
+class RangePattern:
+    def __init__(self, lo, hi, inclusive, line, col):
+        self.lo = lo
+        self.hi = hi
+        self.inclusive = inclusive
+        self.line, self.col = line, col
 
 
 # -- top level -----------------------------------------------------------
@@ -183,30 +271,88 @@ class Param:
         self.line, self.col = line, col
 
 
+class TypeParam:
+    def __init__(self, name, constraint, line, col):
+        self.name = name
+        self.constraint = constraint
+        self.line, self.col = line, col
+
+
 class FnDecl(Stmt):
-    def __init__(self, name, params, ret, body, line, col, span, name_span=1):
+    def __init__(self, name, params, ret, body, line, col, span, name_span=1,
+                 type_params=None, rets=None, extern=False, c_name=None):
         self.name = name
         self.params = params
         self.ret = ret  # Ty or None for void
+        self.rets = list(rets) if rets is not None else ([] if ret is None else [ret])
         self.body = body
         self.name_span = name_span
+        self.type_params = type_params or []
+        self.extern = extern
+        self.c_name = c_name
         self.line, self.col, self.span = line, col, span
-        self.c_name = None
+        self.generic_key = None
+        self.parent_generic = None
 
 
 class NamespaceDecl(Stmt):
-    def __init__(self, name, params, ret, functions, constants, line, col, span):
+    def __init__(self, name, params, ret, functions, constants, line, col, span,
+                 rets=None):
         self.name = name
         self.params = params       # shared parameters, in declaration order
         self.ret = ret             # Ty, or None when the namespace uses `det`
+        self.rets = list(rets) if rets is not None else ([] if ret is None else [ret])
         self.functions = functions # [FnDecl]
         self.constants = constants # [VarDecl]
         self.line, self.col, self.span = line, col, span
 
 
+class FieldDecl:
+    def __init__(self, ty, name, line, col):
+        self.ty = ty
+        self.name = name
+        self.line, self.col = line, col
+
+
+class StructDecl(Stmt):
+    def __init__(self, name, type_params, fields, line, col, span, c_name=None):
+        self.name = name
+        self.type_params = type_params or []
+        self.fields = fields
+        self.line, self.col, self.span = line, col, span
+        self.c_name = c_name or name
+        self.generic_key = None
+        self.parent_generic = None
+
+
+class Expose(Stmt):
+    def __init__(self, names, line, col, span):
+        self.names = names
+        self.line, self.col, self.span = line, col, span
+
+
+class ModuleImport(Stmt):
+    def __init__(self, alias, path, line, col, span):
+        self.alias = alias
+        self.path = path
+        self.line, self.col, self.span = line, col, span
+        self.resolved = None
+
+
 class Program:
-    def __init__(self, globals_, functions, modules, namespaces=None):
+    def __init__(self, globals_, functions, modules=None, namespaces=None,
+                 structs=None, exposes=None, imports=None):
         self.globals = globals_      # [VarDecl]
         self.functions = functions   # [FnDecl]
-        self.modules = modules       # [str] paths, not implemented yet
+        self.modules = modules or [] # legacy path list
         self.namespaces = namespaces or []
+        self.structs = structs or []
+        self.exposes = exposes or []
+        self.imports = imports or []
+        # filled in by the checker / loader
+        self.struct_types = []
+        self.tuple_types = []
+        self.array_types = []
+        self.externs = []
+        self.btl_includes = []
+        self.module_aliases = {}

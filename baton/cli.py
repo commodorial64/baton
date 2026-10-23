@@ -12,6 +12,7 @@ from .checker import check
 from .codegen import generate
 from .diagnostics import CompileError, Reporter
 from .lexer import lex
+from .modules import load_modules
 from .parser import parse
 
 USAGE = """usage: baton <command> <file.bt> [options]
@@ -52,6 +53,7 @@ def compile_to_c(path, warnings):
     try:
         tokens = lex(source, filename)
         program = parse(tokens, source, filename)
+        load_modules(program, path)
         check(program, reporter, filename)
     except CompileError as exc:
         reporter.error(exc)
