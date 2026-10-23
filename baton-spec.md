@@ -837,7 +837,24 @@ fn main() -> i {
 - When `main` returns, the scheduler drains — remaining tasks run to completion before the process exits. A task that never finishes keeps the program alive; `task.stop` it.
 - OS threads and multicore parallelism are a different machine entirely — atomic refcounts and locking are undesigned (section 27).
 
-## 27. Open questions
+## 27. Matrices
+
+Matrices are multidimensional fixed arrays written with repeated brackets: `f[2][3]` is a 2 by 3 matrix of floats. They follow the same rules as arrays (section 12): fixed size, stack-allocated, copied by value.
+
+```
+f[2][3] local a = {{1.0, 2.0, 3.0}, {4.0, 5.0, 6.0}}
+f[3][2] local b = {{7.0, 8.0}, {9.0, 10.0}, {11.0, 12.0}}
+f[2][2] local c = a @ b
+```
+
+- **Literals** use nested braces: each row is `{...}` and rows are wrapped in another set of braces. Missing entries zero-initialize.
+- **Indexing** works normally: `a[0][1]` accesses row 0, column 1.
+- **Elementwise arithmetic** is supported for same-shaped numeric matrices: `a + b`, `a - b`. A matrix can be multiplied or divided by a numeric scalar: `a * 2.0`, `a / 2`.
+- **Matrix multiplication** uses `@`: `a @ b` multiplies `m×n` by `n×p` to give `m×p`. Both operands must be 2-D numeric arrays with matching inner dimensions.
+- **Slicing and lists** are separate features (sections 12, 14). Matrices are fixed arrays, not growable lists.
+- **Type promotion** follows the normal numeric promotion rules (section 5).
+
+## 28. Open questions
 
 Not yet designed:
 

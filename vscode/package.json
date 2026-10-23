@@ -2,7 +2,7 @@
   "name": "baton",
   "displayName": "Baton",
   "description": "Baton language support: syntax highlighting, IntelliSense, signature help and compiler diagnostics.",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "publisher": "baton-language",
   "license": "MIT",
   "repository": {
