@@ -224,6 +224,10 @@ def main(argv):
     gcc = shutil.which("gcc")
     if gcc is None:
         print("baton: gcc not found on PATH", file=sys.stderr)
+        try:
+            os.unlink(c_path)
+        except OSError:
+            pass
         return 2
 
     cmd = [gcc, "-std=c11", "-fwrapv", "-O0", "-g", "-o", binary, c_path, "-lm"]
@@ -233,6 +237,11 @@ def main(argv):
         print(result.stderr.strip(), file=sys.stderr)
         print("baton: the generated C is at %s" % c_path, file=sys.stderr)
         return 1
+
+    try:
+        os.unlink(c_path)
+    except OSError:
+        pass
 
     if opts["command"] == "run":
         proc = subprocess.run([binary])
