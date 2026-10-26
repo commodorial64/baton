@@ -358,8 +358,11 @@ class CodeGen:
     def emit_externs(self):
         if not self.externs:
             return
+        external = [fn for fn in self.externs if not getattr(fn, "from_btl", False)]
+        if not external:
+            return
         self.emit("/* -- extern declarations ---------------------------------------------- */")
-        for fn in self.externs:
+        for fn in external:
             self.emit("%s;" % self.signature(fn))
         self.emit()
 

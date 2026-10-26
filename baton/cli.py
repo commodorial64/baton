@@ -59,15 +59,15 @@ def compile_to_c(path, warnings):
         check(program, reporter, filename)
     except CompileError as exc:
         reporter.error(exc)
-        return None, reporter
+        return None, reporter, None
     if reporter.failed:
-        return None, reporter
+        return None, reporter, None
     try:
         c_source = generate(program, filename)
     except CompileError as exc:
         reporter.error(exc)
-        return None, reporter
-    return c_source, reporter
+        return None, reporter, None
+    return c_source, reporter, program
 
 
 def parse_args(argv):
@@ -204,7 +204,7 @@ def cmd_man(opts):
 
 def lib_dir():
     home = os.path.expanduser("~")
-    base = os.path.join(home, ".local", "share", "baton", "lib")
+    base = os.environ.get("BATON_LIB") or os.path.join(home, ".local", "share", "baton", "lib")
     os.makedirs(base, exist_ok=True)
     return base
 
@@ -216,28 +216,46 @@ def cmd_libinstall(opts):
         return 2
     base = lib_dir()
     import urllib.request
-    import json
-    # Try GitHub raw from commodorial64/baton sharpe or package
-    urls = [
-        f"https://raw.githubusercontent.com/commodorial64/baton/sharpe/{pkg}/{pkg}.btl",
-        f"https://raw.githubusercontent.com/commodorial64/baton/sharpe/{pkg}.btl",
-        f"https://raw.githubusercontent.com/commodorial64/baton/main/{pkg}/{pkg}.btl",
-        f"https://raw.githubusercontent.com/commodorial64/baton/main/{pkg}.btl",
-    ]
-    for url in urls:
+
+    # A package lives in its own directory in the baton repo.  The required
+    # file is `<pkg>/<pkg>.btl` (or `<pkg>.bt`); constants and a companion .c
+    # are optional.  Try the published branch first, then main.
+    branches = ("sharpe", "main")
+    files = [f"{pkg}.btl", f"{pkg}.bt", "constants.bt", f"{pkg}.c"]
+    dirs = []
+    for branch in branches:
+        root = f"https://raw.githubusercontent.com/commodorial64/baton/{branch}"
+        dirs.append(f"{root}/{pkg}")
+        dirs.append(root)
+
+    def fetch(url):
         try:
-            req = urllib.request.Request(url)
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                data = resp.read()
-            outdir = os.path.join(base, pkg)
-            os.makedirs(outdir, exist_ok=True)
-            outpath = os.path.join(outdir, f"{pkg}.btl")
-            with open(outpath, "wb") as f:
-                f.write(data)
-            print(f"installed {pkg} to {outpath}")
-            return 0
+            with urllib.request.urlopen(urllib.request.Request(url), timeout=30) as resp:
+                return resp.read()
         except Exception:
+            return None
+
+    for directory in dirs:
+        primary_name = f"{pkg}.btl"
+        primary = fetch(f"{directory}/{primary_name}")
+        if primary is None:
+            primary_name = f"{pkg}.bt"
+            primary = fetch(f"{directory}/{primary_name}")
+        if primary is None:
             continue
+        outdir = os.path.join(base, pkg)
+        os.makedirs(outdir, exist_ok=True)
+        installed = []
+        for name in files:
+            data = primary if name == primary_name else fetch(f"{directory}/{name}")
+            if data is None:
+                continue
+            outpath = os.path.join(outdir, name)
+            with open(outpath, "wb") as handle:
+                handle.write(data)
+            installed.append(name)
+        print(f"installed {pkg} to {outdir} ({', '.join(installed)})")
+        return 0
     print(f"baton: could not find package '{pkg}'", file=sys.stderr)
     return 1
 
@@ -273,7 +291,7 @@ def main(argv):
         print("baton: no such file: %s" % path, file=sys.stderr)
         return 2
 
-    c_source, reporter = compile_to_c(path, opts["warnings"])
+    c_source, reporter, program = compile_to_c(path, opts["warnings"])
     if c_source is None:
         return 1
 
@@ -295,7 +313,9 @@ def main(argv):
             pass
         return 2
 
+    link_flags = list(getattr(program, "btl_link_flags", []) or [])
     cmd = [gcc, "-std=c11", "-fwrapv", "-O0", "-g", "-o", binary, c_path, "-lm"]
+    cmd.extend(link_flags)
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         print("baton: gcc failed:", file=sys.stderr)

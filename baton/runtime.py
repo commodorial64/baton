@@ -649,8 +649,8 @@ static void *bt_alloc(int64_t count, size_t elem, int64_t line) {
     return p;
 }
 
-static const char *bt_cstr(const char *s) {
-    return s ? s : "";
+static char *bt_cstr(const char *s) {
+    return (char *)(s ? s : "");
 }
 """
 

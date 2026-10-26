@@ -16,13 +16,35 @@ from .parser import parse
 
 
 _C_TYPES = {
-    "int8_t": T.I8, "int16_t": T.I16, "int32_t": T.I32, "int64_t": T.I,
-    "uint8_t": T.U8, "uint16_t": T.U16, "uint32_t": T.U32, "uint64_t": T.U,
+    "int8_t": T.I8, "int16_t": T.I16, "int32_t": T.I32, "int64_t": T.I64 if hasattr(T, "I64") else T.I,
+    "uint8_t": T.U8, "uint16_t": T.U16, "uint32_t": T.U32, "uint64_t": T.U64 if hasattr(T, "U64") else T.U,
     "double": T.F, "float": T.F32, "bool": T.B, "char": T.C,
     "baton_str": T.S,
+    # common C
+    "int": T.I,
+    "short": T.I16 if hasattr(T, "I16") else T.I,
+    "long": T.I,
+    "long long": T.I,
+    "signed": T.I,
+    "unsigned": T.U,
+    "unsigned int": T.U,
+    "unsigned short": T.U16 if hasattr(T, "U16") else T.U,
+    "unsigned long": T.U,
+    "unsigned long long": T.U,
+    "size_t": T.U,
+    "ssize_t": T.I,
+    "void": None,
 }
 
 _QUALIFIERS = {"const", "volatile", "static", "extern", "register"}
+
+
+def lib_dir():
+    """Where `baton libinstall` puts packages (BATON_LIB overrides)."""
+    env = os.environ.get("BATON_LIB")
+    if env:
+        return env
+    return os.path.join(os.path.expanduser("~"), ".local", "share", "baton", "lib")
 
 
 def _strip_comments(text):
@@ -32,17 +54,46 @@ def _strip_comments(text):
 
 
 def _c_type(text):
-    text = " ".join(text.split())
-    ptrs = 0
-    while text.endswith("*"):
-        ptrs += 1
-        text = text[:-1].strip()
-    parts = [p for p in text.replace("*", " ").split() if p not in _QUALIFIERS]
+    s = " ".join(str(text).split())
+    ptrs = s.count("*")
+    # remove stars
+    t = s.replace("*", " ")
+    t = " ".join(t.split())
+    # drop qualifiers
+    parts = [p for p in t.split() if p not in _QUALIFIERS]
     if not parts:
         return None
-    base = _C_TYPES.get(parts[-1])
+    joined = " ".join(parts)
+    base = None
+    if joined in _C_TYPES:
+        base = _C_TYPES[joined]
+    elif parts:
+        base = _C_TYPES.get(parts[-1])
+        if base is None and len(parts) > 1:
+            base = _C_TYPES.get(joined)
+    if base is T.VOID or joined == "void":
+        base = T.VOID
     if base is None:
-        return None
+        # common cases
+        if joined in ("char", "unsigned char", "signed char"):
+            base = T.C
+        elif "void" in joined:
+            base = T.I  # map void* to pointer to int/opaque for baton
+        elif "char" in joined:
+            base = T.C
+        elif joined in ("int", "signed int"):
+            base = T.I
+        elif joined in ("unsigned int", "unsigned"):
+            base = T.U if hasattr(T, "U") else T.I
+        elif joined in ("float",):
+            base = T.F32
+        elif joined in ("double",):
+            base = T.F
+        else:
+            return None
+    # for void pointer base, prefer pointer to int as opaque handle in baton
+    if base == T.VOID and ptrs >= 1:
+        base = T.I
     for _ in range(ptrs):
         base = T.pointer_to(base)
     return base
@@ -68,7 +119,16 @@ def _split_params(text):
 
 def _parse_btl(path, module_name):
     with open(path, "r", encoding="utf-8") as handle:
-        text = _strip_comments(handle.read())
+        raw = handle.read()
+    # A `.btl` may ask the compiler to pass flags to the linker, e.g.
+    #   /* baton:link -lSDL2 */
+    link_flags = []
+    for flag_match in re.finditer(r"baton:link\s+([^\n*]+)", raw):
+        for flag in flag_match.group(1).split():
+            if flag.startswith(("-l", "-L", "-Wl,")):
+                link_flags.append(flag)
+    text = _strip_comments(raw)
+
     # Keep only declarations at file scope; this deliberately accepts the C
     # subset a baton `.btl` uses and skips anything it cannot map.
     pattern = re.compile(
@@ -83,6 +143,8 @@ def _parse_btl(path, module_name):
             continue
         member = full_name[len(prefix):]
         ret = _c_type(ret_text)
+        if ret is T.VOID:
+            ret = None
         if ret is None and ret_text.strip() not in ("void",):
             continue
         params = []
@@ -93,9 +155,8 @@ def _parse_btl(path, module_name):
             if name_match:
                 type_text, name = name_match.group(1), name_match.group(2)
                 type_text = type_text.strip()
-                if not type_text or type_text.endswith("*"):
-                    type_text = type_text + " " + name
-                    name = "arg%d" % i
+                if not type_text:
+                    type_text, name = piece, "arg%d" % i
             else:
                 type_text, name = piece, "arg%d" % i
             ty = _c_type(type_text)
@@ -108,10 +169,13 @@ def _parse_btl(path, module_name):
         rets = [] if ret is None else [ret]
         fn = FnDecl(member, params, ret, None, 1, 1, 1,
                     type_params=[], rets=rets, extern=True, c_name=full_name)
+        fn.from_btl = True
         functions.append(fn)
     if not functions:
         raise CompileError("module '%s' exposes no callable C prototypes" % path)
-    return NamespaceDecl(module_name, [], None, functions, [], 1, 1, 1)
+    ns = NamespaceDecl(module_name, [], None, functions, [], 1, 1, 1)
+    ns.link_flags = list(dict.fromkeys(link_flags))
+    return ns
 
 
 def _check_expose(program, path):
@@ -132,11 +196,13 @@ class ModuleLoader:
         self.stack = [self.root_path]
         self.includes = []
         self.externs = []
+        self.link_flags = []
 
     def run(self):
         self._load_imports(self.root, os.path.dirname(self.root_path))
         self.root.btl_includes = list(dict.fromkeys(self.includes))
         self.root.btl_externs = list(self.externs)
+        self.root.btl_link_flags = list(dict.fromkeys(self.link_flags))
         return self.root
 
     def _load_imports(self, program, base_dir):
@@ -144,6 +210,10 @@ class ModuleLoader:
             path = imp.path
             if not os.path.isabs(path):
                 path = os.path.normpath(os.path.join(base_dir, path))
+                if not os.path.exists(path):
+                    installed = os.path.normpath(os.path.join(lib_dir(), imp.path))
+                    if os.path.exists(installed):
+                        path = installed
             if not os.path.exists(path):
                 raise CompileError("cannot find module '%s'" % imp.path,
                                    imp.line, imp.col, imp.span)
@@ -172,6 +242,7 @@ class ModuleLoader:
                         ns = _parse_btl(real, module_name)
                         self.root.namespaces.append(ns)
                         self.externs.extend(ns.functions)
+                        self.link_flags.extend(getattr(ns, "link_flags", []) or [])
                         self.includes.append(real)
                         self.loaded[real] = ("btl", module_name)
                 finally:

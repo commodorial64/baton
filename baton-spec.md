@@ -602,8 +602,11 @@ The shape is borrowed from Luau's `local RS = game:GetService("ReplicatedStorage
 
 - The file name is the C prefix: `calc.btl` provides `calc_add`, `calc_scale`, ... — the exact convention a baton `ns` generates (section 9), so a namespace and a `.btl` are interchangeable: same call syntax, either one can provide it.
 - The compiler parses the `.btl`'s top-level prototypes whose names start with `<modname>_` and maps C types to baton types: `int64_t` → `i`, `double` → `f`, `bool` → `b`, `char` → `c`, `baton_str` → `s`, `int8_t`..`int32_t` and `uint8_t`..`uint32_t` → `i8`..`i32` / `u8`..`u32`, and pointers as `T *` → `*T` (`int64_t *` → `*i`, `char *` → `*c`).
-- A prototype the compiler cannot map (say `void *` or a library-specific type) is compiled but not callable from baton — not an error, so `.btl` files are free to hold C-only helpers.
+- A prototype the compiler cannot map is included in the C but not callable from baton — not an error, so `.btl` files are free to hold C-only helpers. `void *` maps to `*i` as an opaque handle.
 - The generated C starts with `#include "path/to/calc.btl"`. One gcc invocation; include guards make repeated imports harmless.
+- A `.btl` may carry its own implementations and be header-only; the compiler only reads the prototypes, and the include supplies the code. This keeps a package to one gcc invocation.
+- A `.btl` may request linker flags with a comment: `/* baton:link -lSDL2 */`. Every imported module contributes its flags to the single gcc command.
+- Installed packages live under `~/.local/share/baton/lib` (override with `BATON_LIB`). `baton libinstall <pkg>` fetches `<pkg>/<pkg>.btl` (or `.bt`) plus optional `constants.bt` and `<pkg>.c`, and `baton libs` lists them. A relative import that does not exist next to the importing file is looked up there, so `mod sharpe get-from "sharpe/sharpe.btl"` works after installation.
 
 ### `.bt` — baton modules, `expose` instead of `return`
 

@@ -1,0 +1,17 @@
+mod sharpe get-from "../sharpe/sharpe.btl"
+mod s get-from "../sharpe/constants.bt"
+
+fn main() -> i {
+    i local r = sharpe.init()
+    if r != 0 {
+        return 1
+    }
+    *i local win = sharpe.create_window(cstr("baton sharpe"), s.WINDOWPOS_UNDEFINED, s.WINDOWPOS_UNDEFINED, 640, 480, s.WINDOW_SHOWN)
+    *i local ren = sharpe.create_renderer(win, -1, s.RENDERER_ACCELERATED)
+    sharpe.set_draw_color(ren, 0, 100, 200, 255)
+    sharpe.render_clear(ren)
+    sharpe.render_present(ren)
+    sharpe.delay(100)
+    sharpe.quit()
+    return 0
+}

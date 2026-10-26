@@ -1,28 +1,30 @@
 -- sharpe constants (SDL2)
-i const INIT_VIDEO = 32
-i const INIT_EVENTS = 16384
-i const WINDOWPOS_UNDEFINED = 536805376
-i const WINDOW_OPENGL = 2
-i const WINDOW_SHOWN = 4
-i const WINDOW_RESIZABLE = 16
-i const RENDERER_ACCELERATED = 2
-i const RENDERER_PRESENTVSYNC = 4
-i const QUIT = 256
-i const KEYDOWN = 768
-i const KEYUP = 769
-i const MOUSEMOTION = 1024
-i const MOUSEBUTTONDOWN = 1025
-i const MOUSEBUTTONUP = 1026
-i const BUTTON_LEFT = 1
-i const BUTTON_RIGHT = 3
-i const KEY_ESCAPE = 27
-i const KEY_SPACE = 32
-i const KEY_UP = 1073741906
-i const KEY_DOWN = 1073741905
-i const KEY_LEFT = 1073741904
-i const KEY_RIGHT = 1073741903
-i const KEY_W = 119
-i const KEY_A = 97
-i const KEY_S = 115
-i const KEY_D = 100
+ns constants {
+    i const INIT_VIDEO = 32
+    i const INIT_EVENTS = 16384
+    i const WINDOWPOS_UNDEFINED = 536805376
+    i const WINDOW_OPENGL = 2
+    i const WINDOW_SHOWN = 4
+    i const WINDOW_RESIZABLE = 16
+    i const RENDERER_ACCELERATED = 2
+    i const RENDERER_PRESENTVSYNC = 4
+    i const QUIT = 256
+    i const KEYDOWN = 768
+    i const KEYUP = 769
+    i const MOUSEMOTION = 1024
+    i const MOUSEBUTTONDOWN = 1025
+    i const MOUSEBUTTONUP = 1026
+    i const BUTTON_LEFT = 1
+    i const BUTTON_RIGHT = 3
+    i const KEY_ESCAPE = 27
+    i const KEY_SPACE = 32
+    i const KEY_UP = 1073741906
+    i const KEY_DOWN = 1073741905
+    i const KEY_LEFT = 1073741904
+    i const KEY_RIGHT = 1073741903
+    i const KEY_W = 119
+    i const KEY_A = 97
+    i const KEY_S = 115
+    i const KEY_D = 100
+}
 expose constants
