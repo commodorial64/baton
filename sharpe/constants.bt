@@ -5,7 +5,7 @@ ns constants {
     i const WINDOWPOS_UNDEFINED = 536805376
     i const WINDOW_OPENGL = 2
     i const WINDOW_SHOWN = 4
-    i const WINDOW_RESIZABLE = 16
+    i const WINDOW_RESIZABLE = 32
     i const RENDERER_ACCELERATED = 2
     i const RENDERER_PRESENTVSYNC = 4
     i const QUIT = 256
