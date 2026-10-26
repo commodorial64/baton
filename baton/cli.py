@@ -215,7 +215,30 @@ def cmd_libinstall(opts):
         print("baton: libinstall needs a package name", file=sys.stderr)
         return 2
     base = lib_dir()
+    import json
     import urllib.request
+
+    repo = "https://api.github.com/repos/commodorial64/baton"
+    raw_root = "https://raw.githubusercontent.com/commodorial64/baton"
+
+    def fetch(url):
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": "baton"})
+            with urllib.request.urlopen(request, timeout=30) as resp:
+                return resp.read()
+        except Exception:
+            return None
+
+    def resolve(branch):
+        # Pin to a commit so raw.githubusercontent.com cannot serve a stale
+        # branch cache after a push.  Fall back to the branch name offline.
+        data = fetch("%s/commits/%s" % (repo, branch))
+        if data is None:
+            return branch
+        try:
+            return json.loads(data)["sha"]
+        except Exception:
+            return branch
 
     # A package lives in its own directory in the baton repo.  The required
     # file is `<pkg>/<pkg>.btl` (or `<pkg>.bt`); constants and a companion .c
@@ -224,16 +247,9 @@ def cmd_libinstall(opts):
     files = [f"{pkg}.btl", f"{pkg}.bt", "constants.bt", f"{pkg}.c"]
     dirs = []
     for branch in branches:
-        root = f"https://raw.githubusercontent.com/commodorial64/baton/{branch}"
+        root = f"{raw_root}/{resolve(branch)}"
         dirs.append(f"{root}/{pkg}")
         dirs.append(root)
-
-    def fetch(url):
-        try:
-            with urllib.request.urlopen(urllib.request.Request(url), timeout=30) as resp:
-                return resp.read()
-        except Exception:
-            return None
 
     for directory in dirs:
         primary_name = f"{pkg}.btl"
