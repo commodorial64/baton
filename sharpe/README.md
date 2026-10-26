@@ -77,3 +77,8 @@ a baton string (`cstr("hello")` above).
 
 A runnable version lives in `examples/sharpe_window.bt`.
 
+## Specification
+
+The full API, ABI and installation contract are in
+[`../sharpe-spec.md`](../sharpe-spec.md).
+
