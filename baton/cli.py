@@ -22,6 +22,8 @@ commands:
   run FILE.bt        build and run
   check FILE.bt      stop after type checking (no gcc)
   man [SECTION]      show the language specification (baton-spec.md)
+  libinstall PKG     install a library package
+  libs               list installed libraries
 
 options:
   -o FILE            output binary (default: the source name without .bt)
@@ -76,7 +78,7 @@ def parse_args(argv):
         print("baton %s" % __version__)
         return None
     command = argv[0]
-    if command not in ("build", "run", "check", "man"):
+    if command not in ("build", "run", "check", "man", "libinstall", "libs"):
         print("baton: unknown command '%s'\n" % command, file=sys.stderr)
         print(USAGE, file=sys.stderr)
         return None
@@ -117,6 +119,11 @@ def parse_args(argv):
         i += 1
     if command == "man":
         opts["section"] = positional
+        return opts
+    if command == "libinstall":
+        opts["package"] = positional
+        return opts
+    if command == "libs":
         return opts
     if positional is None:
         print("baton: %s needs a .bt file" % command, file=sys.stderr)
@@ -195,6 +202,60 @@ def cmd_man(opts):
     return page(markdown.render(text, width=page_width()), opts["pager"])
 
 
+def lib_dir():
+    home = os.path.expanduser("~")
+    base = os.path.join(home, ".local", "share", "baton", "lib")
+    os.makedirs(base, exist_ok=True)
+    return base
+
+
+def cmd_libinstall(opts):
+    pkg = opts.get("package")
+    if not pkg:
+        print("baton: libinstall needs a package name", file=sys.stderr)
+        return 2
+    base = lib_dir()
+    import urllib.request
+    import json
+    # Try GitHub raw from commodorial64/baton sharpe or package
+    urls = [
+        f"https://raw.githubusercontent.com/commodorial64/baton/sharpe/{pkg}/{pkg}.btl",
+        f"https://raw.githubusercontent.com/commodorial64/baton/sharpe/{pkg}.btl",
+        f"https://raw.githubusercontent.com/commodorial64/baton/main/{pkg}/{pkg}.btl",
+        f"https://raw.githubusercontent.com/commodorial64/baton/main/{pkg}.btl",
+    ]
+    for url in urls:
+        try:
+            req = urllib.request.Request(url)
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = resp.read()
+            outdir = os.path.join(base, pkg)
+            os.makedirs(outdir, exist_ok=True)
+            outpath = os.path.join(outdir, f"{pkg}.btl")
+            with open(outpath, "wb") as f:
+                f.write(data)
+            print(f"installed {pkg} to {outpath}")
+            return 0
+        except Exception:
+            continue
+    print(f"baton: could not find package '{pkg}'", file=sys.stderr)
+    return 1
+
+
+def cmd_libs():
+    base = lib_dir()
+    if not os.path.exists(base):
+        print("(none)")
+        return 0
+    items = os.listdir(base)
+    if not items:
+        print("(none)")
+        return 0
+    for i in sorted(items):
+        print(i)
+    return 0
+
+
 def main(argv):
     opts = parse_args(argv)
     if opts is None:
@@ -202,6 +263,10 @@ def main(argv):
 
     if opts["command"] == "man":
         return cmd_man(opts)
+    if opts["command"] == "libinstall":
+        return cmd_libinstall(opts)
+    if opts["command"] == "libs":
+        return cmd_libs()
 
     path = opts["file"]
     if not os.path.exists(path):

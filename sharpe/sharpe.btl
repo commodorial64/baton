@@ -1,0 +1,24 @@
+#ifndef SHARPE_BTL
+#define SHARPE_BTL
+
+/* SDL2 bindings for Baton (sharpe) */
+
+#include <SDL2/SDL.h>
+
+int sharpe_init(void);
+void sharpe_quit(void);
+void* sharpe_create_window(const char *title, int x, int y, int w, int h, unsigned int flags);
+void* sharpe_create_renderer(void *window, int index, unsigned int flags);
+int sharpe_poll_event(int *type, int *key, int *x, int *y, int *button, int *xrel, int *yrel);
+void sharpe_render_clear(void *renderer);
+void sharpe_render_present(void *renderer);
+void sharpe_set_draw_color(void *renderer, unsigned char r, unsigned char g, unsigned char b, unsigned char a);
+int sharpe_draw_point(void *renderer, int x, int y);
+int sharpe_draw_line(void *renderer, int x1, int y1, int x2, int y2);
+int sharpe_draw_rect(void *renderer, int x, int y, int w, int h);
+int sharpe_fill_rect(void *renderer, int x, int y, int w, int h);
+void sharpe_delay(int ms);
+int sharpe_get_ticks(void);
+int sharpe_get_error(char *buf, int len);
+
+#endif
