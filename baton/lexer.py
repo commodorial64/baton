@@ -60,6 +60,9 @@ class Lexer:
         self.col = 1
         self.tokens = []
         self.depth = 0  # brackets that suppress newlines: ( and [
+        self.await_package = False  # just saw get-from
+        self.in_package = False     # inside <...>
+        self.package_closes = set() # offsets of closing > in a package import
 
     # -- helpers ---------------------------------------------------------
     def peek(self, ahead=0):
@@ -103,13 +106,19 @@ class Lexer:
                 self.advance()
                 prev = self.last_significant()
                 suppress = self.depth > 0
-                if prev is not None and (
+                if prev is not None and prev.kind == "OP" and prev.text == ">":
+                    # A package import ends at >; a normal comparison continues.
+                    suppress = prev.off not in self.package_closes
+                elif prev is not None and (
                     (prev.kind == "OP" and prev.text in _CONTINUATION)
                     or (prev.kind == "KW" and prev.text in _CONTINUATION)
                 ):
                     suppress = True
                 if not suppress and self.tokens and self.tokens[-1].kind != "NL":
                     self.emit("NL", "\\n", line, col)
+                if not suppress:
+                    self.await_package = False
+                    self.in_package = False
                 continue
 
             if ch == "-" and self.peek(1) == "-":
@@ -174,6 +183,7 @@ class Lexer:
             for _ in range(5):
                 self.advance()
             self.emit("KW", "get-from", line, col, off=off)
+            self.await_package = True
             return
         if text in KEYWORDS:
             self.emit("KW", text, line, col, off=off)
@@ -288,6 +298,12 @@ class Lexer:
                 elif op in (")", "]"):
                     self.depth = max(0, self.depth - 1)
                 self.emit("OP", op, line, col, off=off)
+                if op == "<" and self.await_package:
+                    self.in_package = True
+                    self.await_package = False
+                elif op == ">" and self.in_package:
+                    self.package_closes.add(off)
+                    self.in_package = False
                 return True
         return False
 

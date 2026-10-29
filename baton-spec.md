@@ -589,13 +589,26 @@ mod get-from "lib/calc.btl"           -- calc.add(1, 2), calc.scale(2, 3)
 mod m get-from "lib/calc.btl"         -- m.add(1, 2) instead
 ```
 
+Installed packages use angle brackets instead of a path:
+
+```
+mod sharpe get-from <sharpe>          -- latest installed version
+mod s get-from <sharpe>@0.2           -- exactly version 0.2
+mod c get-from <sharpe/constants.bt>  -- a file inside the package
+```
+
+- `<pkg>` looks under `~/.local/lib/baton/<pkg>/latest/` (or the highest installed version) for `<pkg>.btl`, then `<pkg>.bt`.
+- `<pkg>@version` looks under `~/.local/lib/baton/<pkg>/<version>/` instead.
+- `<pkg/path>` loads `path` inside the chosen version directory; without an extension, `.btl` and then `.bt` are tried.
+- Quoted paths are plain filesystem paths: relative to the file doing the importing, or absolute. They are never looked up as installed packages.
+- `BATON_LIB` overrides the library root.
+
 The shape is borrowed from Luau's `local RS = game:GetService("ReplicatedStorage")`: the `mod m` is the `local RS` (the binding), `get-from` is the `game:GetService` (the fetch), and the path is the service name (what identifies the thing being fetched).
 
 - No `local` — just `mod`.
 - **The module's name comes from the file name:** `calc.btl` is the module `calc`. Nothing after `mod` means "use the file's name".
 - Anything after `mod` is an alias: `mod m get-from "..."` binds `m` and nothing else. The alias only renames the baton-side surface — `m.add(1, 2)` still compiles to `calc_add(1, 2)`.
 - Top-level only, file-scoped: visible from the `mod` line to the end of the file, like globals (section 3).
-- Paths are relative to the file doing the importing.
 - Each file is compiled once, no matter how many files import it. Cycles between `.bt` files are a compile error.
 
 ### `.btl` — C modules
@@ -606,7 +619,7 @@ The shape is borrowed from Luau's `local RS = game:GetService("ReplicatedStorage
 - The generated C starts with `#include "path/to/calc.btl"`. One gcc invocation; include guards make repeated imports harmless.
 - A `.btl` may carry its own implementations and be header-only; the compiler only reads the prototypes, and the include supplies the code. This keeps a package to one gcc invocation.
 - A `.btl` may request linker flags with a comment: `/* baton:link -lSDL2 */`. Every imported module contributes its flags to the single gcc command.
-- Installed packages live under `~/.local/share/baton/lib` (override with `BATON_LIB`). `baton libinstall <pkg>` fetches `<pkg>/<pkg>.btl` (or `.bt`) plus optional `constants.bt` and `<pkg>.c`, and `baton libs` lists them. A relative import that does not exist next to the importing file is looked up there, so `mod sharpe get-from "sharpe/sharpe.btl"` works after installation.
+- Installed packages live under `~/.local/lib/baton` (override with `BATON_LIB`). `baton libinstall <pkg>@<version>` fetches `<pkg>/<pkg>.btl` (or `.bt`) plus an optional `package.json`, `constants.bt`, and `<pkg>.c`, and installs them under `<pkg>/<version>/`. It resolves the source from tag `v<version>`, then tag or branch `<version>`, then the package branches (`sharpe`, `main`) with a warning unless `package.json` declares the requested version. `baton libinstall <pkg>` installs the branch tip into `<pkg>/latest/` (or the manifest's version), and points `<pkg>/latest` at the newest installed version. `baton libs` lists packages and their versions. `package.json` may declare `{"name": ..., "version": ..., "files": [...]}` to add companion files.
 
 ### `.bt` — baton modules, `expose` instead of `return`
 
