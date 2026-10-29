@@ -230,6 +230,36 @@ def test_libinstall_falls_back_to_a_branch_with_a_warning(tmp_path, monkeypatch,
     assert "installed demo 2.0" in captured.out
 
 
+def test_libinstall_branch_fallback_trusts_a_matching_manifest(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("BATON_LIB", str(tmp_path / "lib"))
+    files = {
+        ("branchsha", "demo/demo.btl"): b"int64_t demo_go(void);\n",
+        ("branchsha", "demo/package.json"): (
+            b'{"name": "demo", "version": "0.2", "files": ["demo.btl"]}'
+        ),
+    }
+    fake_github(monkeypatch, {"sharpe": "branchsha"}, files)
+
+    assert cmd_libinstall({"package": "demo@0.2"}) == 0
+    target = tmp_path / "lib" / "demo" / "0.2"
+    assert (target / "demo.btl").is_file()
+    captured = capsys.readouterr()
+    assert "warning" not in captured.err
+    assert "installed demo 0.2" in captured.out
+
+
+def test_libinstall_without_a_version_uses_the_manifest(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("BATON_LIB", str(tmp_path / "lib"))
+    files = {
+        ("branchsha", "demo/demo.btl"): b"int64_t demo_go(void);\n",
+        ("branchsha", "demo/package.json"): b'{"name": "demo", "version": "0.1"}',
+    }
+    fake_github(monkeypatch, {"sharpe": "branchsha"}, files)
+
+    assert cmd_libinstall({"package": "demo"}) == 0
+    assert (tmp_path / "lib" / "demo" / "0.1" / "demo.btl").is_file()
+
+
 def test_libs_lists_versions(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("BATON_LIB", str(tmp_path / "lib"))
     (tmp_path / "lib" / "demo" / "0.1").mkdir(parents=True)
