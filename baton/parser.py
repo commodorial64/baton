@@ -1,5 +1,7 @@
 """Tokens -> AST (specification sections 2 through 10)."""
 
+import re
+
 from . import types as T
 from .ast_nodes import (
     AddrOf, Assign, Binary, Block, BoolLit, BraceLit, Break, Call, Cast, CharLit,
@@ -142,13 +144,85 @@ class Parser:
             alias = self.next().text
         self.expect_kw("get-from", "after 'mod'")
         p = self.peek()
-        if p.kind != "STR":
-            raise CompileError("expected a quoted module path, found %s" % self._describe(p),
-                               p.line, p.col)
-        self.next()
-        end = self.toks[self.pos - 1]
-        return ModuleImport(alias, p.text, start.line, start.col,
-                            max(1, end.off - start.off + len(end.text)))
+        if p.kind == "STR":
+            self.next()
+            end = self.toks[self.pos - 1]
+            return ModuleImport(alias, p.text, start.line, start.col,
+                                max(1, end.off - start.off + len(end.text)))
+        if p.is_op("<"):
+            return self.parse_package_mod(alias, start)
+        raise CompileError("expected a quoted module path or <package>, found %s"
+                           % self._describe(p), p.line, p.col)
+
+    def parse_package_mod(self, alias, start):
+        lt = self.expect_op("<")
+        close = self.src.find(">", lt.off + 1)
+        newline = self.src.find("\n", lt.off + 1)
+        if close == -1 or (newline != -1 and newline < close):
+            raise CompileError("unterminated package import; expected '>'",
+                               lt.line, lt.col)
+        target = self.src[lt.off + 1:close].strip()
+        if not target:
+            raise CompileError("empty package import", lt.line, lt.col)
+        end = close + 1
+        self._skip_tokens_to(end)
+
+        # The version may sit outside the angle brackets: <sharpe>@0.2
+        version = None
+        pos = end
+        while pos < len(self.src) and self.src[pos] in " \t":
+            pos += 1
+        if pos < len(self.src) and self.src[pos] == "@":
+            begin = pos + 1
+            pos = begin
+            while pos < len(self.src):
+                ch = self.src[pos]
+                if ch.isspace() or ch == ";":
+                    break
+                if self.src.startswith("--", pos) or self.src.startswith("/-", pos):
+                    break
+                pos += 1
+            version = self.src[begin:pos]
+            if not version:
+                raise CompileError("expected a version after '@'",
+                                   self.toks[self.pos - 1].line,
+                                   self.toks[self.pos - 1].col)
+            end = pos
+            self._skip_tokens_to(end)
+
+        outside_version = version
+        package, _, entry = target.partition("/")
+        entry = entry.strip() or None
+        if "@" in package:
+            package, _, inline = package.partition("@")
+            if version is not None and version != inline:
+                raise CompileError("package version given twice", start.line, start.col)
+            version = inline
+        package = package.strip()
+
+        if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", package):
+            raise CompileError("invalid package name '%s'" % package,
+                               start.line, start.col)
+        if version is not None and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]*", version):
+            raise CompileError("invalid package version '%s'" % version,
+                               start.line, start.col)
+        if entry:
+            parts = entry.replace("\\", "/").split("/")
+            if entry.startswith("/") or ".." in parts:
+                raise CompileError("invalid package entry '%s'" % entry,
+                                   start.line, start.col)
+
+        display = "<%s>" % target
+        if outside_version is not None:
+            display += "@" + outside_version
+        return ModuleImport(alias, display, start.line, start.col,
+                            max(1, end - start.off),
+                            package=package, version=version, entry=entry)
+
+    def _skip_tokens_to(self, offset):
+        """Consume tokens that begin before `offset` (a raw source position)."""
+        while self.pos < len(self.toks) and self.toks[self.pos].off < offset:
+            self.next()
 
     def parse_expose(self):
         start = self.expect_kw("expose")

@@ -1,9 +1,14 @@
 """The `baton` command line (specification section 1)."""
 
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+import tempfile
+import urllib.parse
+import urllib.request
 
 from . import __version__
 from . import markdown
@@ -12,7 +17,7 @@ from .checker import check
 from .codegen import generate
 from .diagnostics import CompileError, Reporter
 from .lexer import lex
-from .modules import load_modules
+from .modules import installed_versions, latest_package_dir, lib_dir, load_modules
 from .parser import parse
 
 USAGE = """usage: baton <command> <file.bt> [options]
@@ -22,8 +27,8 @@ commands:
   run FILE.bt        build and run
   check FILE.bt      stop after type checking (no gcc)
   man [SECTION]      show the language specification (baton-spec.md)
-  libinstall PKG     install a library package
-  libs               list installed libraries
+  libinstall PKG[@VERSION]  install a library package
+  libs               list installed libraries and versions
 
 options:
   -o FILE            output binary (default: the source name without .bt)
@@ -202,22 +207,79 @@ def cmd_man(opts):
     return page(markdown.render(text, width=page_width()), opts["pager"])
 
 
-def lib_dir():
-    home = os.path.expanduser("~")
-    base = os.environ.get("BATON_LIB") or os.path.join(home, ".local", "share", "baton", "lib")
-    os.makedirs(base, exist_ok=True)
-    return base
+_PACKAGE_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]*$")
+_VERSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
+
+
+def split_package_spec(text):
+    """Split `pkg` or `pkg@version`; a leading v on the version is dropped."""
+    pkg, sep, version = text.partition("@")
+    if sep and not version:
+        raise ValueError("version missing after '@'")
+    if not _PACKAGE_RE.fullmatch(pkg):
+        raise ValueError("invalid package name '%s'" % pkg)
+    if version and not _VERSION_RE.fullmatch(version):
+        raise ValueError("invalid package version '%s'" % version)
+    if version and version.startswith("v") and len(version) > 1:
+        version = version[1:]
+    return pkg, (version or None)
+
+
+def _safe_relative(name):
+    rel = str(name).replace("\\", "/")
+    parts = [part for part in rel.split("/") if part not in ("", ".")]
+    if not parts or any(part == ".." for part in parts):
+        return None
+    return "/".join(parts)
+
+
+def _install_refs(version):
+    """Refs to try, as (ref, is_branch_fallback) pairs."""
+    if version is None or version == "latest":
+        return [("sharpe", False), ("main", False)]
+    refs = ["v" + version, version, "sharpe", "main"]
+    return [(ref, ref in ("sharpe", "main"))
+            for ref in dict.fromkeys(refs)]
+
+
+def _point_latest(pkg_root, version):
+    """Make `latest` point at the newest installed version."""
+    latest = os.path.join(pkg_root, "latest")
+    if version == "latest":
+        if os.path.islink(latest):
+            os.unlink(latest)
+        return
+    versions = installed_versions(pkg_root)
+    if not versions:
+        return
+    target = versions[-1]
+    if os.path.islink(latest):
+        if os.path.basename(os.path.realpath(latest)) == target:
+            return
+        os.unlink(latest)
+    elif os.path.isdir(latest):
+        shutil.rmtree(latest)
+    elif os.path.lexists(latest):
+        os.unlink(latest)
+    try:
+        os.symlink(target, latest)
+    except OSError:
+        pass
 
 
 def cmd_libinstall(opts):
-    pkg = opts.get("package")
-    if not pkg:
+    spec = opts.get("package")
+    if not spec:
         print("baton: libinstall needs a package name", file=sys.stderr)
         return 2
-    base = lib_dir()
-    import json
-    import urllib.request
+    try:
+        pkg, version = split_package_spec(spec)
+    except ValueError as exc:
+        print("baton: %s" % exc, file=sys.stderr)
+        return 2
 
+    base = lib_dir()
+    os.makedirs(base, exist_ok=True)
     repo = "https://api.github.com/repos/commodorial64/baton"
     raw_root = "https://raw.githubusercontent.com/commodorial64/baton"
 
@@ -229,50 +291,117 @@ def cmd_libinstall(opts):
         except Exception:
             return None
 
-    def resolve(branch):
+    def resolve(ref):
         # Pin to a commit so raw.githubusercontent.com cannot serve a stale
-        # branch cache after a push.  Fall back to the branch name offline.
-        data = fetch("%s/commits/%s" % (repo, branch))
+        # branch cache after a push.  Fall back to the ref name offline.
+        data = fetch("%s/commits/%s" % (repo, urllib.parse.quote(ref, safe="")))
         if data is None:
-            return branch
+            return ref
         try:
             return json.loads(data)["sha"]
         except Exception:
-            return branch
+            return ref
 
-    # A package lives in its own directory in the baton repo.  The required
-    # file is `<pkg>/<pkg>.btl` (or `<pkg>.bt`); constants and a companion .c
-    # are optional.  Try the published branch first, then main.
-    branches = ("sharpe", "main")
-    files = [f"{pkg}.btl", f"{pkg}.bt", "constants.bt", f"{pkg}.c"]
-    dirs = []
-    for branch in branches:
-        root = f"{raw_root}/{resolve(branch)}"
-        dirs.append(f"{root}/{pkg}")
-        dirs.append(root)
+    def install_from(directory, ref, commit, fallback):
+        primary = None
+        primary_name = None
+        for name in (pkg + ".btl", pkg + ".bt"):
+            data = fetch("%s/%s" % (directory, name))
+            if data is not None:
+                primary = data
+                primary_name = name
+                break
+        if primary is None:
+            return None
 
-    for directory in dirs:
-        primary_name = f"{pkg}.btl"
-        primary = fetch(f"{directory}/{primary_name}")
-        if primary is None:
-            primary_name = f"{pkg}.bt"
-            primary = fetch(f"{directory}/{primary_name}")
-        if primary is None:
-            continue
-        outdir = os.path.join(base, pkg)
-        os.makedirs(outdir, exist_ok=True)
+        manifest = {}
+        manifest_data = fetch("%s/package.json" % directory)
+        if manifest_data is not None:
+            try:
+                loaded = json.loads(manifest_data.decode("utf-8"))
+                if isinstance(loaded, dict):
+                    manifest = loaded
+            except Exception:
+                manifest = {}
+        if manifest.get("name") and manifest["name"] != pkg:
+            return None
+
+        target_version = version
+        if target_version is None:
+            target_version = str(manifest.get("version") or "latest")
+        if not _VERSION_RE.fullmatch(target_version):
+            return None
+        if fallback and version:
+            declared = manifest.get("version")
+            if declared is not None and str(declared) != target_version:
+                return None
+
+        names = []
+        if isinstance(manifest.get("files"), list):
+            names.extend(str(name) for name in manifest["files"])
+        names.extend([primary_name, "constants.bt", pkg + ".c", "package.json"])
+
+        pkg_root = os.path.join(base, pkg)
+        os.makedirs(pkg_root, exist_ok=True)
+        outdir = os.path.join(pkg_root, target_version)
+        tmp = tempfile.mkdtemp(prefix=".install-", dir=pkg_root)
         installed = []
-        for name in files:
-            data = primary if name == primary_name else fetch(f"{directory}/{name}")
-            if data is None:
-                continue
-            outpath = os.path.join(outdir, name)
-            with open(outpath, "wb") as handle:
-                handle.write(data)
-            installed.append(name)
-        print(f"installed {pkg} to {outdir} ({', '.join(installed)})")
-        return 0
-    print(f"baton: could not find package '{pkg}'", file=sys.stderr)
+        try:
+            for name in dict.fromkeys(names):
+                rel = _safe_relative(name)
+                if rel is None:
+                    continue
+                data = primary if rel == primary_name else fetch("%s/%s" % (directory, rel))
+                if data is None:
+                    continue
+                dest = os.path.join(tmp, *rel.split("/"))
+                os.makedirs(os.path.dirname(dest), exist_ok=True)
+                with open(dest, "wb") as handle:
+                    handle.write(data)
+                installed.append(rel)
+            meta = {
+                "name": pkg,
+                "version": target_version,
+                "ref": ref,
+                "commit": commit,
+                "files": installed,
+            }
+            with open(os.path.join(tmp, ".baton-package.json"), "w", encoding="utf-8") as handle:
+                json.dump(meta, handle, indent=2, sort_keys=True)
+                handle.write("\n")
+            if os.path.islink(outdir) or os.path.isfile(outdir):
+                os.unlink(outdir)
+            elif os.path.isdir(outdir):
+                shutil.rmtree(outdir)
+            os.replace(tmp, outdir)
+        except Exception:
+            shutil.rmtree(tmp, ignore_errors=True)
+            raise
+        _point_latest(pkg_root, target_version)
+        warn = bool(fallback and version and manifest.get("version") is None)
+        return ("installed %s %s to %s (%s)"
+                % (pkg, target_version, outdir, ", ".join(installed)), warn)
+
+    refs = _install_refs(version)
+    for ref, fallback in refs:
+        commit = resolve(ref)
+        root = "%s/%s" % (raw_root, commit)
+        for directory in ("%s/%s" % (root, pkg), root):
+            result = install_from(directory, ref, commit, fallback)
+            if result is not None:
+                message, warn = result
+                if warn:
+                    print("baton: warning: no tag for %s %s; installed %s"
+                          % (pkg, version, ref), file=sys.stderr)
+                print(message)
+                return 0
+
+    tried = ", ".join(ref for ref, _ in refs)
+    if version:
+        print("baton: could not find package '%s' version '%s' (tried %s)"
+              % (pkg, version, tried), file=sys.stderr)
+    else:
+        print("baton: could not find package '%s'" % pkg, file=sys.stderr)
     return 1
 
 
@@ -281,12 +410,24 @@ def cmd_libs():
     if not os.path.exists(base):
         print("(none)")
         return 0
-    items = os.listdir(base)
+    items = [name for name in sorted(os.listdir(base))
+             if os.path.isdir(os.path.join(base, name))]
     if not items:
         print("(none)")
         return 0
-    for i in sorted(items):
-        print(i)
+    for pkg in items:
+        root = os.path.join(base, pkg)
+        versions = installed_versions(root)
+        latest = latest_package_dir(root)
+        latest_name = os.path.basename(latest) if latest else None
+        if versions:
+            shown = [version + (" (latest)" if version == latest_name else "")
+                     for version in versions]
+            print("%s  %s" % (pkg, ", ".join(shown)))
+        elif latest_name:
+            print("%s  latest" % pkg)
+        else:
+            print(pkg)
     return 0
 
 

@@ -44,7 +44,46 @@ def lib_dir():
     env = os.environ.get("BATON_LIB")
     if env:
         return env
-    return os.path.join(os.path.expanduser("~"), ".local", "share", "baton", "lib")
+    return os.path.join(os.path.expanduser("~"), ".local", "lib", "baton")
+
+
+_VERSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
+
+
+def version_key(name):
+    """Sort key for package versions such as 0.1, 0.2 and 1.10.3."""
+    key = []
+    for part in re.split(r"[._+-]", name):
+        if part.isdigit():
+            key.append((0, int(part), ""))
+        else:
+            key.append((1, 0, part))
+    return tuple(key)
+
+
+def installed_versions(package_root):
+    """Version directories installed under one package, oldest first."""
+    if not os.path.isdir(package_root):
+        return []
+    versions = []
+    for name in os.listdir(package_root):
+        path = os.path.join(package_root, name)
+        if name.startswith(".") or name == "latest":
+            continue
+        if os.path.isdir(path) and _VERSION_RE.match(name):
+            versions.append(name)
+    return sorted(versions, key=version_key)
+
+
+def latest_package_dir(package_root):
+    """The directory `latest` points at, or the highest installed version."""
+    link = os.path.join(package_root, "latest")
+    if os.path.isdir(link):
+        return os.path.realpath(link)
+    versions = installed_versions(package_root)
+    if versions:
+        return os.path.join(package_root, versions[-1])
+    return None
 
 
 def _strip_comments(text):
@@ -205,18 +244,74 @@ class ModuleLoader:
         self.root.btl_link_flags = list(dict.fromkeys(self.link_flags))
         return self.root
 
+    def _resolve_import(self, imp, base_dir):
+        if imp.package:
+            return self._resolve_package(imp)
+        path = imp.path
+        if os.path.isabs(path):
+            candidate = os.path.normpath(path)
+        else:
+            candidate = os.path.normpath(os.path.join(base_dir, path))
+        if not os.path.isfile(candidate):
+            raise CompileError("cannot find module '%s'" % imp.path,
+                               imp.line, imp.col, imp.span)
+        return candidate
+
+    def _resolve_package(self, imp):
+        root = os.path.join(lib_dir(), imp.package)
+        if not os.path.isdir(root):
+            raise CompileError(
+                "package '%s' is not installed under %s (run 'baton libinstall %s')"
+                % (imp.package, lib_dir(), imp.package),
+                imp.line, imp.col, imp.span)
+
+        if imp.version and imp.version != "latest":
+            if not _VERSION_RE.fullmatch(imp.version) or imp.version in (".", ".."):
+                raise CompileError("invalid package version '%s'" % imp.version,
+                                   imp.line, imp.col, imp.span)
+            version_dir = os.path.join(root, imp.version)
+            if not os.path.isdir(version_dir):
+                versions = installed_versions(root)
+                hint = ""
+                if versions:
+                    hint = "; installed: " + ", ".join(versions)
+                raise CompileError(
+                    "package '%s' version '%s' is not installed under %s%s"
+                    % (imp.package, imp.version, root, hint),
+                    imp.line, imp.col, imp.span)
+        else:
+            version_dir = latest_package_dir(root)
+            if version_dir is None:
+                raise CompileError(
+                    "package '%s' has no installed versions under %s"
+                    % (imp.package, root),
+                    imp.line, imp.col, imp.span)
+
+        if imp.entry:
+            rel = imp.entry.replace("\\", "/")
+            base = os.path.normpath(os.path.join(version_dir, *rel.split("/")))
+            candidates = [base]
+            if not os.path.splitext(base)[1]:
+                candidates += [base + ".btl", base + ".bt"]
+        else:
+            candidates = [os.path.join(version_dir, imp.package + ".btl"),
+                          os.path.join(version_dir, imp.package + ".bt")]
+
+        for candidate in candidates:
+            if os.path.isfile(candidate):
+                return candidate
+
+        if imp.entry:
+            wanted = ", ".join(candidates)
+        else:
+            wanted = "%s.btl or %s.bt" % (imp.package, imp.package)
+        raise CompileError(
+            "package '%s' has no %s in %s" % (imp.package, wanted, version_dir),
+            imp.line, imp.col, imp.span)
+
     def _load_imports(self, program, base_dir):
         for imp in program.imports:
-            path = imp.path
-            if not os.path.isabs(path):
-                path = os.path.normpath(os.path.join(base_dir, path))
-                if not os.path.exists(path):
-                    installed = os.path.normpath(os.path.join(lib_dir(), imp.path))
-                    if os.path.exists(installed):
-                        path = installed
-            if not os.path.exists(path):
-                raise CompileError("cannot find module '%s'" % imp.path,
-                                   imp.line, imp.col, imp.span)
+            path = self._resolve_import(imp, base_dir)
             real = os.path.abspath(path)
             stem, ext = os.path.splitext(os.path.basename(real))
             ext = ext.lower()

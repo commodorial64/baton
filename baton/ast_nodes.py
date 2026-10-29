@@ -332,9 +332,13 @@ class Expose(Stmt):
 
 
 class ModuleImport(Stmt):
-    def __init__(self, alias, path, line, col, span):
+    def __init__(self, alias, path, line, col, span,
+                 package=None, version=None, entry=None):
         self.alias = alias
         self.path = path
+        self.package = package
+        self.version = version
+        self.entry = entry
         self.line, self.col, self.span = line, col, span
         self.resolved = None
 
