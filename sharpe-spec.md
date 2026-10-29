@@ -1,48 +1,38 @@
 # sharpe — SDL2 bindings for Baton
 
-**Specification 0.1** · ships with Baton 0.3.0
+**Specification 0.2**
 
-sharpe is the SDL2 binding for Baton: the low-level window, renderer, event and
-timing surface needed to put pixels on screen without writing C. It is a
-normal Baton module pair, not a compiler feature.
-
-## 1. Scope
-
-This document specifies:
-
-- the `sharpe` module's public functions and their semantics;
-- the `constants` module's public constants;
-- the ABI rules the binding follows when baton values cross into C;
-- how the module is linked and installed.
+sharpe is a small SDL2 binding for Baton. The public API uses short verb names
+instead of long `create_window` / `set_draw_color` style names.
 
 The implementation is the normative companion of this document:
 
 ```
 sharpe/sharpe.btl        namespace sharpe   (header-only C binding)
 sharpe/constants.bt      namespace constants
+sharpe/package.json      package metadata (name, version, files)
 ```
 
-Only the functions and constants listed here are part of the public API.
-Everything else in the header is an implementation detail.
-
-## 2. Files and imports
+## 1. Importing
 
 ```baton
-mod sharpe get-from "sharpe/sharpe.btl"
-mod s get-from "sharpe/constants.bt"
+mod sharpe get-from <sharpe>                 -- latest installed version
+mod s get-from <sharpe/constants.bt>         -- a file inside that version
 ```
 
-- `sharpe.btl` exposes the namespace `sharpe`; calls read `sharpe.<name>(...)`.
-- `constants.bt` exposes the namespace `constants`; the alias `s` in the
-  example above makes them `s.<NAME>`.
-- Both are ordinary `.bt`/`.btl` imports (Baton spec section 19). An alias may
-  be any name, e.g. `mod consts get-from "sharpe/constants.bt"` gives
-  `consts.QUIT`.
-- The `.btl` file is header-only: its prototypes and implementations live in
-  the same file. The compiler reads the prototypes; the generated C includes
-  the file and therefore the code.
+Pin a version with `@`:
 
-## 3. Linking and platform requirements
+```baton
+mod sharpe get-from <sharpe>@0.2
+mod s get-from <sharpe/constants.bt>@0.2
+```
+
+`sharpe.btl` exposes the namespace `sharpe`; calls read `sharpe.<name>(...)`.
+`constants.bt` exposes the namespace `constants`; the alias `s` makes them
+`s.<NAME>`. Quoted paths still work and are resolved relative to the importing
+file; they are never package lookups.
+
+## 2. Linking
 
 `sharpe.btl` begins with:
 
@@ -50,236 +40,209 @@ mod s get-from "sharpe/constants.bt"
 /* baton:link -lSDL2 */
 ```
 
-The compiler appends this flag to the single gcc link command (Baton spec
-section 19), so `baton build` and `baton run` need no extra flags.
+The compiler adds that flag to the gcc link command, so no extra flags are
+needed for `baton build` or `baton run`.
 
 Requirements:
 
 - SDL2 development headers reachable as `SDL2/SDL.h`;
-- the SDL2 shared library available at link and run time;
-- a display or a valid `SDL_VIDEODRIVER` (for example `dummy`) at run time.
+- the SDL2 shared library at link and run time;
+- a display, or a valid `SDL_VIDEODRIVER` such as `dummy`.
 
-sharpe does not bundle, download, or configure SDL2.
+## 3. Handles and ABI
 
-## 4. Handles and ABI
-
-`SDL_Window *` and `SDL_Renderer *` are exposed as Baton `*i` opaque handles.
-Callers must not dereference, index, or perform arithmetic on them. They are
-only valid until `sharpe.quit()`.
+Windows and renderers are opaque `*i` handles. They are only valid until
+`sharpe.quit()`.
 
 At the ABI boundary:
 
-- Baton `i` is `int64_t`. Every integer parameter and output is `int64_t`;
-  the binding casts to SDL's narrower `int`/`Uint32` inside.
+- Baton `i` is `int64_t`; every integer parameter and output is `int64_t`.
 - Baton `u8` is `uint8_t`, used for color channels.
-- Baton `*i` is `int64_t *`; every out-parameter is an addressable `i`.
+- Baton `*i` is `int64_t *`; out-parameters are addresses of live `i` values.
 - Baton `*c` is `char *`, used for the error buffer.
-- `void *` return values are mapped to `*i`.
+- The window and renderer handles are `void *` on the C side.
 
-Because outputs are `int64_t`, a caller must pass the address of an `i`
-variable (`&ev`), not an `i32`/`u8`.
+## 4. Lifecycle
 
-## 5. Window and renderer lifecycle
+### `sharpe.init() -> i`
 
-```baton
-i local rc = sharpe.init()
-if rc != 0 { return 1 }
+Initializes SDL video and events. Returns `0` on success and non-zero on
+failure.
 
-*i local win = sharpe.create_window(
-    cstr("hello"),
-    s.WINDOWPOS_UNDEFINED, s.WINDOWPOS_UNDEFINED,
-    800, 600,
-    s.WINDOW_SHOWN
-)
-*i local ren = sharpe.create_renderer(win, -1, s.RENDERER_ACCELERATED)
-```
+### `sharpe.window(*c title, i width, i height) -> *i`
 
-`init() -> i`
-: Initializes SDL video and events. Returns `0` on success, non-zero on
-  failure (the SDL convention). Call once before anything else.
+Creates a centered, visible window. Returns a window handle or null on failure.
 
-`quit()`
-: Shuts SDL down and destroys all windows, renderers and other SDL resources
-  created through the binding. Call once at the end.
+### `sharpe.renderer(*i window) -> *i`
 
-`create_window(*c title, i x, i y, i w, i h, i flags) -> *i`
-: Creates a window. `title` is a C string (`cstr(...)`); `x` and `y` may be
-  `WINDOWPOS_UNDEFINED` to let the window manager place the window; `w`/`h`
-  are the client size in pixels; `flags` is a bitwise OR of `WINDOW_*`.
-  Returns a window handle, or a null pointer on failure.
+Creates an accelerated renderer for the window, falling back to software if
+needed. Returns a renderer handle or null on failure.
 
-`create_renderer(*i window, i index, i flags) -> *i`
-: Creates a renderer for `window`. `index` selects the rendering driver,
-  with `-1` meaning "the first one that works". `flags` is a bitwise OR of
-  `RENDERER_*`. Returns a renderer handle, or a null pointer on failure.
+### `sharpe.quit()`
 
-The binding currently exposes no `destroy_window`/`destroy_renderer`;
-resources are released by `quit()`. Programs that create many windows in one
-run should account for that.
-
-## 6. Event polling
-
-```
-sharpe.poll_event(*i type, *i key, *i x, *i y,
-                  *i button, *i xrel, *i yrel) -> i
-```
-
-Polls one pending event.
-
-- Returns `1` if an event was written, `0` if the queue is empty.
-- On a `1` return, `type` always receives the event type.
-- `key` is written only for `KEYDOWN`/`KEYUP`; it receives the key symbol
-  (compare against `KEY_*`).
-- `x`/`y` receive mouse coordinates for `MOUSEMOTION` and mouse-button events.
-- `xrel`/`yrel` receive relative motion for `MOUSEMOTION`.
-- `button` receives the button index for `MOUSEBUTTONDOWN`/`MOUSEBUTTONUP`.
-- Fields that do not apply to the event are set to `0`.
-- Any out-pointer may be null to ignore that field. In Baton, a zeroed `*i`
-  is null; a pointer to a live `i` is the usual form.
+Calls `SDL_Quit()` and releases every SDL resource created by the binding.
 
 ```baton
-i local running = 1
+if sharpe.init() != 0 {
+    return 1
+}
+
+*i local win = sharpe.window(cstr("hello"), 800, 600)
+if isnull(win) {
+    return 1
+}
+
+*i local ren = sharpe.renderer(win)
+if isnull(ren) {
+    return 1
+}
+```
+
+Call `sharpe.error(...)` after a failed `init`, `window`, or `renderer` call to
+retrieve SDL's message.
+
+## 5. Events
+
+### `sharpe.poll(*i type, *i key, *i x, *i y, *i button) -> i`
+
+Polls one SDL event. Returns `1` if an event was written, `0` if the queue is
+empty.
+
+- `type` receives the event type.
+- `key` receives the key symbol for `KEYDOWN` / `KEYUP`.
+- `x` / `y` receive mouse coordinates for motion and button events.
+- `button` receives the button index for mouse-button events.
+
+Out-pointers may be null to ignore a field.
+
+```baton
 i local ev = 0
 i local key = 0
 i local x = 0
 i local y = 0
 i local btn = 0
-i local xr = 0
-i local yr = 0
 
-while running == 1 {
-    if sharpe.poll_event(&ev, &key, &x, &y, &btn, &xr, &yr) == 1 {
-        if ev == s.QUIT { running = 0 }
-        if ev == s.KEYDOWN {
-            if key == s.KEY_ESCAPE { running = 0 }
-        }
-    }
+while sharpe.poll(&ev, &key, &x, &y, &btn) == 1 {
+    if ev == s.QUIT { running = 0 }
+    if ev == s.KEYDOWN and key == s.KEY_ESCAPE { running = 0 }
 }
 ```
 
-## 7. Drawing
+## 6. Drawing
 
-`render_clear(*i renderer)`
-: Clears the whole target to the renderer's current draw color.
+All drawing calls use the renderer's current color.
 
-`render_present(*i renderer)`
-: Presents the back buffer. Nothing appears on screen until this is called.
+### `sharpe.color(*i renderer, u8 r, u8 g, u8 b)`
 
-`set_draw_color(*i renderer, u8 r, u8 g, u8 b, u8 a)`
-: Sets the color used by `render_clear` and the drawing calls. Channels are
-  `0..255`.
+Sets the drawing color. Alpha is opaque (`255`).
 
-`draw_point(*i renderer, i x, i y) -> i`
-: Draws one point.
+### `sharpe.clear(*i renderer)`
 
-`draw_line(*i renderer, i x1, i y1, i x2, i y2) -> i`
-: Draws a line segment.
+Clears the whole target to the current color.
 
-`draw_rect(*i renderer, i x, i y, i w, i h) -> i`
-: Draws a rectangle outline.
+### `sharpe.present(*i renderer)`
 
-`fill_rect(*i renderer, i x, i y, i w, i h) -> i`
-: Fills a rectangle.
+Presents the back buffer.
 
-Drawing calls return `0` on success and a negative value on error, following
-SDL. They draw with the renderer's current draw color.
+### `sharpe.point(*i renderer, i x, i y) -> i`
 
-## 8. Timing and errors
+Draws one point.
 
-`delay(i ms)`
-: Blocks for at least `ms` milliseconds.
+### `sharpe.line(*i renderer, i x1, i y1, i x2, i y2) -> i`
 
-`get_ticks() -> i`
-: Milliseconds since SDL was initialized. Suitable for frame timing.
+Draws a line segment.
 
-`get_error(*c buf, i len) -> i`
-: Copies the current SDL error message into `buf`, which must hold at least
-  `len` bytes. Writes at most `len - 1` characters plus a terminating null.
-  Returns `1` when `len` is positive (the buffer receives the current message,
-  which may be empty) and `0` when `len` is not positive. Call this after a
-  failed `init`, window or renderer creation.
+### `sharpe.rect(*i renderer, i x, i y, i w, i h) -> i`
 
-## 9. Constants namespace
+Draws a rectangle outline.
 
-The `constants` namespace mirrors the SDL values Baton programs need. All are
-`i`.
+### `sharpe.fill(*i renderer, i x, i y, i w, i h) -> i`
 
-| Group | Names | Notes |
-| --- | --- | --- |
-| init flags | `INIT_VIDEO`, `INIT_EVENTS` | SDL subsystem bits |
-| window position | `WINDOWPOS_UNDEFINED` | pass as `x`/`y` to center |
-| window flags | `WINDOW_OPENGL`, `WINDOW_SHOWN`, `WINDOW_RESIZABLE` | OR them for `create_window` |
-| renderer flags | `RENDERER_ACCELERATED`, `RENDERER_PRESENTVSYNC` | OR them for `create_renderer` |
-| event types | `QUIT`, `KEYDOWN`, `KEYUP`, `MOUSEMOTION`, `MOUSEBUTTONDOWN`, `MOUSEBUTTONUP` | compare with the `type` output |
-| mouse buttons | `BUTTON_LEFT`, `BUTTON_RIGHT` | compare with the `button` output |
-| keys | `KEY_ESCAPE`, `KEY_SPACE`, `KEY_UP`, `KEY_DOWN`, `KEY_LEFT`, `KEY_RIGHT`, `KEY_W`, `KEY_A`, `KEY_S`, `KEY_D` | compare with the `key` output |
+Fills a rectangle.
 
-Values are the SDL2 definitions, kept as decimal literals in
-`sharpe/constants.bt`. `init()` always requests both video and events, so the
-init flags are exported for reference rather than as arguments.
+The shape calls return `0` on success and a negative SDL error code on failure.
 
-## 10. Installation and versioning
+## 7. Timing and errors
 
-The published package is installed with the Baton package manager:
+### `sharpe.wait(i ms)`
+
+Blocks for at least `ms` milliseconds.
+
+### `sharpe.ticks() -> i`
+
+Milliseconds since SDL was initialized.
+
+### `sharpe.error(*c buf, i len) -> i`
+
+Copies the current SDL error into `buf`, which must hold at least `len` bytes.
+Writes at most `len - 1` characters plus a terminator. Returns `1` when `len` is
+positive, otherwise `0`.
+
+## 8. Constants
+
+`constants.bt` exports the SDL values a small program needs:
+
+| Group | Names |
+| --- | --- |
+| events | `QUIT`, `KEYDOWN`, `KEYUP`, `MOUSEMOTION`, `MOUSEBUTTONDOWN`, `MOUSEBUTTONUP` |
+| buttons | `BUTTON_LEFT`, `BUTTON_RIGHT` |
+| keys | `KEY_ESCAPE`, `KEY_SPACE`, `KEY_UP`, `KEY_DOWN`, `KEY_LEFT`, `KEY_RIGHT`, `KEY_W`, `KEY_A`, `KEY_S`, `KEY_D`, `KEY_R` |
+
+The `init`, window, and renderer flags are no longer public; the binding chooses
+simple defaults.
+
+## 9. Installation
 
 ```
-baton libinstall sharpe
+baton libinstall sharpe@0.2
 baton libs
 ```
 
-`libinstall` places `sharpe.btl` and `constants.bt` under
-`$BATON_LIB/sharpe/`, defaulting to `~/.local/share/baton/lib/sharpe/`.
-Imports that do not resolve relative to the importing file are then looked up
-under the library directory, so every program can use the same relative paths:
+`libinstall` places `sharpe.btl`, `constants.bt`, and the package metadata under
+`$BATON_LIB/sharpe/0.2/`, defaulting to `~/.local/lib/baton/sharpe/0.2/`. It
+also points `$BATON_LIB/sharpe/latest` at the newest installed version, which is
+what `<sharpe>` resolves. `baton libinstall sharpe` installs the branch tip into
+the version declared by `sharpe/package.json` (currently `0.2`).
 
-```baton
-mod sharpe get-from "sharpe/sharpe.btl"
-mod s get-from "sharpe/constants.bt"
+`baton libs` lists the installed versions:
+
+```
+sharpe  0.2 (latest)
 ```
 
-The package is content-addressed at install time: `libinstall` resolves the
-source branch to a commit before downloading, so a push is picked up
-immediately.
+## 10. Versioning
 
-This document describes sharpe specification 0.1. Additive changes (new
-functions, new constants) keep the version; a change to existing signatures
-or semantics requires a new specification version.
+This document describes sharpe 0.2. The 0.2 API is intentionally smaller than
+0.1:
 
-## 11. Conformance
+- `create_window` / `create_renderer` became `window` / `renderer`;
+- `poll_event` became `poll` and no longer reports relative mouse motion;
+- `render_clear` / `render_present` became `clear` / `present`;
+- `set_draw_color` became `color`;
+- `draw_point`, `draw_line`, `draw_rect`, and `fill_rect` became `point`,
+  `line`, `rect`, and `fill`;
+- `get_ticks` / `get_error` became `ticks` / `error`;
+- `delay` became `wait`;
+- `init` and `quit` stay, because raw renderer handles are still useful to
+  custom `.btl` modules.
 
-An implementation conforms to this specification when:
-
-- it exposes the functions of section 5–8 with the given parameter and return
-  shapes;
-- it exposes the constants of section 9 with the SDL2 values;
-- it links with SDL2 when the module is imported (section 3);
-- integer out-parameters are 64-bit (`int64_t`), so Baton `i` variables and
-  `&i` addresses are safe.
-
-The reference implementation is `sharpe/sharpe.btl`; the constants reference
-is `sharpe/constants.bt`.
-
-## 12. Minimal example
+## 11. Minimal example
 
 ```baton
-mod sharpe get-from "sharpe/sharpe.btl"
-mod s get-from "sharpe/constants.bt"
+mod sharpe get-from <sharpe>
 
 fn main() -> i {
     if sharpe.init() != 0 {
         return 1
     }
-    *i local win = sharpe.create_window(
-        cstr("baton sharpe"),
-        s.WINDOWPOS_UNDEFINED, s.WINDOWPOS_UNDEFINED,
-        640, 480,
-        s.WINDOW_SHOWN
-    )
-    *i local ren = sharpe.create_renderer(win, -1, s.RENDERER_ACCELERATED)
-    sharpe.set_draw_color(ren, 0, 100, 200, 255)
-    sharpe.render_clear(ren)
-    sharpe.render_present(ren)
-    sharpe.delay(100)
+
+    *i local win = sharpe.window(cstr("baton sharpe"), 640, 480)
+    *i local ren = sharpe.renderer(win)
+
+    sharpe.color(ren, 0, 100, 200)
+    sharpe.clear(ren)
+    sharpe.present(ren)
+    sharpe.wait(100)
     sharpe.quit()
     return 0
 }

@@ -1,15 +1,21 @@
 #ifndef SHARPE_BTL
 #define SHARPE_BTL
 
-/* SDL2 bindings for Baton (sharpe).
+/* sharpe 0.2 -- simple SDL2 bindings for Baton.
  *
- * Header-only: the implementations live here so a baton program can use the
- * module with a single gcc invocation.  The compiler reads the prototypes
- * below and adds the link flags requested by the directive.
+ * Short, underscore-free names:
  *
- * The baton-facing prototypes use int64_t (baton's `i`) and cast to SDL's
- * narrower types inside, so `i` values and `&i` pointers have the size baton
- * expects. */
+ *     if sharpe.init() != 0 { return 1 }
+ *     *i local win = sharpe.window(cstr("hello"), 800, 600)
+ *     *i local ren = sharpe.renderer(win)
+ *     sharpe.color(ren, 20, 40, 60)
+ *     sharpe.clear(ren)
+ *     sharpe.present(ren)
+ *     sharpe.quit()
+ *
+ * Header-only: prototypes and implementations live here, so a Baton program
+ * still needs a single gcc invocation.  Baton `i` is int64_t; the binding
+ * casts to SDL's narrower types internally. */
 
 /* baton:link -lSDL2 */
 
@@ -19,19 +25,19 @@
 
 int64_t sharpe_init(void);
 void sharpe_quit(void);
-void* sharpe_create_window(const char *title, int64_t x, int64_t y, int64_t w, int64_t h, int64_t flags);
-void* sharpe_create_renderer(void *window, int64_t index, int64_t flags);
-int64_t sharpe_poll_event(int64_t *type, int64_t *key, int64_t *x, int64_t *y, int64_t *button, int64_t *xrel, int64_t *yrel);
-void sharpe_render_clear(void *renderer);
-void sharpe_render_present(void *renderer);
-void sharpe_set_draw_color(void *renderer, uint8_t r, uint8_t g, uint8_t b, uint8_t a);
-int64_t sharpe_draw_point(void *renderer, int64_t x, int64_t y);
-int64_t sharpe_draw_line(void *renderer, int64_t x1, int64_t y1, int64_t x2, int64_t y2);
-int64_t sharpe_draw_rect(void *renderer, int64_t x, int64_t y, int64_t w, int64_t h);
-int64_t sharpe_fill_rect(void *renderer, int64_t x, int64_t y, int64_t w, int64_t h);
-void sharpe_delay(int64_t ms);
-int64_t sharpe_get_ticks(void);
-int64_t sharpe_get_error(char *buf, int64_t len);
+void* sharpe_window(const char *title, int64_t width, int64_t height);
+void* sharpe_renderer(void *window);
+int64_t sharpe_poll(int64_t *type, int64_t *key, int64_t *x, int64_t *y, int64_t *button);
+void sharpe_color(void *renderer, uint8_t r, uint8_t g, uint8_t b);
+void sharpe_clear(void *renderer);
+void sharpe_present(void *renderer);
+int64_t sharpe_point(void *renderer, int64_t x, int64_t y);
+int64_t sharpe_line(void *renderer, int64_t x1, int64_t y1, int64_t x2, int64_t y2);
+int64_t sharpe_rect(void *renderer, int64_t x, int64_t y, int64_t w, int64_t h);
+int64_t sharpe_fill(void *renderer, int64_t x, int64_t y, int64_t w, int64_t h);
+void sharpe_wait(int64_t ms);
+int64_t sharpe_ticks(void);
+int64_t sharpe_error(char *buf, int64_t len);
 
 int64_t sharpe_init(void) {
     return SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
@@ -41,81 +47,90 @@ void sharpe_quit(void) {
     SDL_Quit();
 }
 
-void* sharpe_create_window(const char *title, int64_t x, int64_t y, int64_t w, int64_t h, int64_t flags) {
-    return SDL_CreateWindow(title, (int)x, (int)y, (int)w, (int)h, (Uint32)flags);
+void* sharpe_window(const char *title, int64_t width, int64_t height) {
+    return SDL_CreateWindow(
+        title ? title : "sharpe",
+        SDL_WINDOWPOS_CENTERED,
+        SDL_WINDOWPOS_CENTERED,
+        (int)width,
+        (int)height,
+        SDL_WINDOW_SHOWN
+    );
 }
 
-void* sharpe_create_renderer(void *window, int64_t index, int64_t flags) {
-    return SDL_CreateRenderer((SDL_Window*)window, (int)index, (Uint32)flags);
+void* sharpe_renderer(void *window) {
+    SDL_Renderer *renderer = SDL_CreateRenderer((SDL_Window*)window, -1, SDL_RENDERER_ACCELERATED);
+    if (!renderer) {
+        renderer = SDL_CreateRenderer((SDL_Window*)window, -1, SDL_RENDERER_SOFTWARE);
+    }
+    return renderer;
 }
 
-int64_t sharpe_poll_event(int64_t *type, int64_t *key, int64_t *x, int64_t *y, int64_t *button, int64_t *xrel, int64_t *yrel) {
-    SDL_Event e;
-    if (!SDL_PollEvent(&e)) return 0;
-    if (type) *type = (int64_t)e.type;
+int64_t sharpe_poll(int64_t *type, int64_t *key, int64_t *x, int64_t *y, int64_t *button) {
+    SDL_Event event;
+    if (!SDL_PollEvent(&event)) return 0;
+
+    if (type) *type = (int64_t)event.type;
     if (key) *key = 0;
     if (x) *x = 0;
     if (y) *y = 0;
     if (button) *button = 0;
-    if (xrel) *xrel = 0;
-    if (yrel) *yrel = 0;
-    if (e.type == SDL_KEYDOWN || e.type == SDL_KEYUP) {
-        if (key) *key = (int64_t)e.key.keysym.sym;
-    } else if (e.type == SDL_MOUSEMOTION) {
-        if (x) *x = (int64_t)e.motion.x;
-        if (y) *y = (int64_t)e.motion.y;
-        if (xrel) *xrel = (int64_t)e.motion.xrel;
-        if (yrel) *yrel = (int64_t)e.motion.yrel;
-    } else if (e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
-        if (x) *x = (int64_t)e.button.x;
-        if (y) *y = (int64_t)e.button.y;
-        if (button) *button = (int64_t)e.button.button;
+
+    if (event.type == SDL_KEYDOWN || event.type == SDL_KEYUP) {
+        if (key) *key = (int64_t)event.key.keysym.sym;
+    } else if (event.type == SDL_MOUSEMOTION) {
+        if (x) *x = (int64_t)event.motion.x;
+        if (y) *y = (int64_t)event.motion.y;
+    } else if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP) {
+        if (x) *x = (int64_t)event.button.x;
+        if (y) *y = (int64_t)event.button.y;
+        if (button) *button = (int64_t)event.button.button;
     }
     return 1;
 }
 
-void sharpe_render_clear(void *renderer) {
-    SDL_RenderClear((SDL_Renderer*)renderer);
+void sharpe_color(void *ptr, uint8_t r, uint8_t g, uint8_t b) {
+    SDL_SetRenderDrawColor((SDL_Renderer*)ptr, r, g, b, 255);
 }
 
-void sharpe_render_present(void *renderer) {
-    SDL_RenderPresent((SDL_Renderer*)renderer);
+void sharpe_clear(void *ptr) {
+    SDL_RenderClear((SDL_Renderer*)ptr);
 }
 
-void sharpe_set_draw_color(void *renderer, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
-    SDL_SetRenderDrawColor((SDL_Renderer*)renderer, r, g, b, a);
+void sharpe_present(void *ptr) {
+    SDL_RenderPresent((SDL_Renderer*)ptr);
 }
 
-int64_t sharpe_draw_point(void *renderer, int64_t x, int64_t y) {
-    return SDL_RenderDrawPoint((SDL_Renderer*)renderer, (int)x, (int)y);
+int64_t sharpe_point(void *ptr, int64_t x, int64_t y) {
+    return SDL_RenderDrawPoint((SDL_Renderer*)ptr, (int)x, (int)y);
 }
 
-int64_t sharpe_draw_line(void *renderer, int64_t x1, int64_t y1, int64_t x2, int64_t y2) {
-    return SDL_RenderDrawLine((SDL_Renderer*)renderer, (int)x1, (int)y1, (int)x2, (int)y2);
+int64_t sharpe_line(void *ptr, int64_t x1, int64_t y1, int64_t x2, int64_t y2) {
+    return SDL_RenderDrawLine((SDL_Renderer*)ptr, (int)x1, (int)y1, (int)x2, (int)y2);
 }
 
-int64_t sharpe_draw_rect(void *renderer, int64_t x, int64_t y, int64_t w, int64_t h) {
+int64_t sharpe_rect(void *ptr, int64_t x, int64_t y, int64_t w, int64_t h) {
     SDL_Rect rect = {(int)x, (int)y, (int)w, (int)h};
-    return SDL_RenderDrawRect((SDL_Renderer*)renderer, &rect);
+    return SDL_RenderDrawRect((SDL_Renderer*)ptr, &rect);
 }
 
-int64_t sharpe_fill_rect(void *renderer, int64_t x, int64_t y, int64_t w, int64_t h) {
+int64_t sharpe_fill(void *ptr, int64_t x, int64_t y, int64_t w, int64_t h) {
     SDL_Rect rect = {(int)x, (int)y, (int)w, (int)h};
-    return SDL_RenderFillRect((SDL_Renderer*)renderer, &rect);
+    return SDL_RenderFillRect((SDL_Renderer*)ptr, &rect);
 }
 
-void sharpe_delay(int64_t ms) {
+void sharpe_wait(int64_t ms) {
     SDL_Delay((Uint32)ms);
 }
 
-int64_t sharpe_get_ticks(void) {
+int64_t sharpe_ticks(void) {
     return (int64_t)SDL_GetTicks();
 }
 
-int64_t sharpe_get_error(char *buf, int64_t len) {
-    const char *err = SDL_GetError();
-    if (!err || len <= 0) return 0;
-    strncpy(buf, err, (size_t)(len - 1));
+int64_t sharpe_error(char *buf, int64_t len) {
+    const char *message = SDL_GetError();
+    if (!buf || !message || len <= 0) return 0;
+    strncpy(buf, message, (size_t)(len - 1));
     buf[len - 1] = '\0';
     return 1;
 }

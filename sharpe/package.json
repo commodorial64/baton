@@ -1,0 +1,8 @@
+{
+  "name": "sharpe",
+  "version": "0.2",
+  "files": [
+    "sharpe.btl",
+    "constants.bt"
+  ]
+}

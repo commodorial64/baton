@@ -1,25 +1,40 @@
 # sharpe
 
-SDL2 bindings for Baton. It's what SDL2 is to C and what pygame is to python.
+Simple SDL2 bindings for Baton.
+
+The API uses short, underscore-free names: `window`, `renderer`, `poll`,
+`clear`, `present`, `fill`, `rect`, `color`, `wait`, and so on.
+
+## Install
+
+```
+baton libinstall sharpe@0.2
+```
+
+This installs into `~/.local/lib/baton/sharpe/0.2/` and points
+`~/.local/lib/baton/sharpe/latest` at the newest version. `BATON_LIB` overrides
+the library root. Use `<sharpe>@0.2` to pin an exact version.
 
 ## Usage
 
 ```baton
-mod sharpe get-from "sharpe/sharpe.btl"
-mod s get-from "sharpe/constants.bt"
+mod sharpe get-from <sharpe>
+mod s get-from <sharpe/constants.bt>
 
 fn main() -> i {
     if sharpe.init() != 0 {
         return 1
     }
 
-    *i local win = sharpe.create_window(
-        cstr("hello"),
-        s.WINDOWPOS_UNDEFINED, s.WINDOWPOS_UNDEFINED,
-        800, 600,
-        s.WINDOW_SHOWN
-    )
-    *i local ren = sharpe.create_renderer(win, -1, s.RENDERER_ACCELERATED)
+    *i local win = sharpe.window(cstr("hello"), 800, 600)
+    if isnull(win) {
+        return 1
+    }
+
+    *i local ren = sharpe.renderer(win)
+    if isnull(ren) {
+        return 1
+    }
 
     i local running = 1
     i local ev = 0
@@ -27,23 +42,23 @@ fn main() -> i {
     i local x = 0
     i local y = 0
     i local btn = 0
-    i local xr = 0
-    i local yr = 0
 
     while running == 1 {
-        if sharpe.poll_event(&ev, &key, &x, &y, &btn, &xr, &yr) == 1 {
-            if ev == s.QUIT { running = 0 }
-            if ev == s.KEYDOWN {
-                if key == s.KEY_ESCAPE { running = 0 }
+        while sharpe.poll(&ev, &key, &x, &y, &btn) == 1 {
+            if ev == s.QUIT {
+                running = 0
+            }
+            if ev == s.KEYDOWN and key == s.KEY_ESCAPE {
+                running = 0
             }
         }
 
-        sharpe.set_draw_color(ren, 20, 40, 60, 255)
-        sharpe.render_clear(ren)
-        sharpe.set_draw_color(ren, 255, 100, 50, 255)
-        sharpe.fill_rect(ren, 100, 100, 200, 150)
-        sharpe.render_present(ren)
-        sharpe.delay(16)
+        sharpe.color(ren, 20, 40, 60)
+        sharpe.clear(ren)
+        sharpe.color(ren, 255, 100, 50)
+        sharpe.fill(ren, 100, 100, 200, 150)
+        sharpe.present(ren)
+        sharpe.wait(16)
     }
 
     sharpe.quit()
@@ -51,34 +66,61 @@ fn main() -> i {
 }
 ```
 
-## Structure
+A runnable version lives in `examples/sharpe_window.bt`.
 
-- `sharpe.btl` — the SDL2 binding. It is header-only: the prototypes and the
-  C implementations live in the same file, so a baton program needs only one
-  gcc invocation. The prototypes use `int64_t` (baton's `i`) and cast to SDL's
-  narrower types internally.
-- `constants.bt` — SDL constants as the `constants` namespace. Import it with
-  an alias (`mod s get-from "sharpe/constants.bt"`) and use `s.WINDOW_SHOWN`,
-  `s.QUIT`, and so on.
+## API
+
+| Call | Purpose |
+| --- | --- |
+| `sharpe.init()` | Start SDL video and events |
+| `sharpe.quit()` | Stop SDL and release its resources |
+| `sharpe.window(title, width, height)` | Create a centered, visible window |
+| `sharpe.renderer(window)` | Create a renderer for the window |
+| `sharpe.poll(&type, &key, &x, &y, &button)` | Poll one event; returns `1` if one was read |
+| `sharpe.color(renderer, r, g, b)` | Set the drawing color |
+| `sharpe.clear(renderer)` | Clear to the current color |
+| `sharpe.present(renderer)` | Show the rendered frame |
+| `sharpe.point(renderer, x, y)` | Draw one point |
+| `sharpe.line(renderer, x1, y1, x2, y2)` | Draw a line |
+| `sharpe.rect(renderer, x, y, w, h)` | Draw a rectangle outline |
+| `sharpe.fill(renderer, x, y, w, h)` | Fill a rectangle |
+| `sharpe.wait(ms)` | Sleep for milliseconds |
+| `sharpe.ticks()` | Milliseconds since SDL started |
+| `sharpe.error(buf, len)` | Copy the current SDL error into `buf` |
+
+`window` and `renderer` return null on failure. `color` uses an opaque alpha.
+
+## Constants
+
+`constants.bt` exposes the SDL event, mouse-button, and key values used by
+sharpe. Import it with a short alias:
+
+```baton
+mod s get-from <sharpe/constants.bt>
+```
+
+```baton
+s.QUIT
+s.KEYDOWN
+s.KEY_ESCAPE
+s.BUTTON_LEFT
+```
 
 ## Linking
 
-Nothing extra to pass. The binding declares its linker flags in the header:
+Nothing extra to pass. The binding declares its linker flag in the header:
 
-```
+```c
 /* baton:link -lSDL2 */
 ```
 
-The collection of `baton:link` flags from every imported `.btl` is appended to
-the gcc link command automatically. `baton build` and `baton run` pick them up.
+`baton build` and `baton run` collect that flag automatically. SDL2 headers and
+library must be installed.
 
 Strings handed to C use `cstr(...)`, which yields the null-terminated bytes of
-a baton string (`cstr("hello")` above).
-
-A runnable version lives in `examples/sharpe_window.bt`.
+a Baton string.
 
 ## Specification
 
-The full API, ABI and installation contract are in
+The full API and ABI contract are in
 [`../sharpe-spec.md`](../sharpe-spec.md).
-

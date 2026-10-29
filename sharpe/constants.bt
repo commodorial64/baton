@@ -1,13 +1,5 @@
 -- sharpe constants (SDL2)
 ns constants {
-    i const INIT_VIDEO = 32
-    i const INIT_EVENTS = 16384
-    i const WINDOWPOS_UNDEFINED = 536805376
-    i const WINDOW_OPENGL = 2
-    i const WINDOW_SHOWN = 4
-    i const WINDOW_RESIZABLE = 32
-    i const RENDERER_ACCELERATED = 2
-    i const RENDERER_PRESENTVSYNC = 4
     i const QUIT = 256
     i const KEYDOWN = 768
     i const KEYUP = 769
@@ -26,5 +18,6 @@ ns constants {
     i const KEY_A = 97
     i const KEY_S = 115
     i const KEY_D = 100
+    i const KEY_R = 114
 }
 expose constants

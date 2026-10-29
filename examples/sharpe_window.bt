@@ -1,12 +1,13 @@
-mod sharpe get-from "../sharpe/sharpe.btl"
-mod s get-from "../sharpe/constants.bt"
+mod sharpe get-from <sharpe>
+mod s get-from <sharpe/constants.bt>
 
 fn main() -> i {
     if sharpe.init() != 0 {
         return 1
     }
-    *i local win = sharpe.create_window(cstr("hello"), s.WINDOWPOS_UNDEFINED, s.WINDOWPOS_UNDEFINED, 800, 600, s.WINDOW_SHOWN)
-    *i local ren = sharpe.create_renderer(win, -1, s.RENDERER_ACCELERATED)
+
+    *i local win = sharpe.window(cstr("hello"), 800, 600)
+    *i local ren = sharpe.renderer(win)
 
     i local running = 1
     i local ev = 0
@@ -14,21 +15,23 @@ fn main() -> i {
     i local x = 0
     i local y = 0
     i local btn = 0
-    i local xr = 0
-    i local yr = 0
+
     while running == 1 {
-        if sharpe.poll_event(&ev, &key, &x, &y, &btn, &xr, &yr) == 1 {
-            if ev == s.QUIT { running = 0 }
-            if ev == s.KEYDOWN {
-                if key == s.KEY_ESCAPE { running = 0 }
+        while sharpe.poll(&ev, &key, &x, &y, &btn) == 1 {
+            if ev == s.QUIT {
+                running = 0
+            }
+            if ev == s.KEYDOWN and key == s.KEY_ESCAPE {
+                running = 0
             }
         }
-        sharpe.set_draw_color(ren, 20, 40, 60, 255)
-        sharpe.render_clear(ren)
-        sharpe.set_draw_color(ren, 255, 100, 50, 255)
-        sharpe.fill_rect(ren, 100, 100, 200, 150)
-        sharpe.render_present(ren)
-        sharpe.delay(16)
+
+        sharpe.color(ren, 20, 40, 60)
+        sharpe.clear(ren)
+        sharpe.color(ren, 255, 100, 50)
+        sharpe.fill(ren, 100, 100, 200, 150)
+        sharpe.present(ren)
+        sharpe.wait(16)
     }
 
     sharpe.quit()
