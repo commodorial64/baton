@@ -1,6 +1,13 @@
 # package build output
 dist/
 
+# generated C output
+examples/*.c
+tests/*.c
+
+# test build output
+tests/.build/
+
 # python caches and virtual environments
 __pycache__/
 *.pyc
