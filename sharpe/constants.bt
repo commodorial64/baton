@@ -8,6 +8,11 @@ ns constants {
     i const WINDOW_RESIZABLE = 16
     i const RENDERER_ACCELERATED = 2
     i const RENDERER_PRESENTVSYNC = 4
+    i const TTF_STYLE_NORMAL = 0
+    i const TTF_STYLE_BOLD = 1
+    i const TTF_STYLE_ITALIC = 2
+    i const TTF_STYLE_UNDERLINE = 4
+    i const TTF_STYLE_STRIKETHROUGH = 8
     i const QUIT = 256
     i const KEYDOWN = 768
     i const KEYUP = 769

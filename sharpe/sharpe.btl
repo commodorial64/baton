@@ -11,9 +11,10 @@
  * narrower types inside, so `i` values and `&i` pointers have the size baton
  * expects. */
 
-/* baton:link -lSDL2 */
+/* baton:link -lSDL2 -lSDL2_ttf */
 
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -32,6 +33,16 @@ int64_t sharpe_fill_rect(void *renderer, int64_t x, int64_t y, int64_t w, int64_
 void sharpe_delay(int64_t ms);
 int64_t sharpe_get_ticks(void);
 int64_t sharpe_get_error(char *buf, int64_t len);
+
+/* SDL_ttf font support. Font handles are opaque *i values in Baton. */
+int64_t sharpe_ttf_init(void);
+void sharpe_ttf_quit(void);
+void* sharpe_load_font(const char *path, int64_t point_size);
+void sharpe_close_font(void *font);
+void sharpe_set_font_style(void *font, int64_t style);
+int64_t sharpe_text_width(void *font, const char *text);
+int64_t sharpe_text_height(void *font, const char *text);
+int64_t sharpe_draw_text(void *renderer, void *font, const char *text, int64_t x, int64_t y, uint8_t r, uint8_t g, uint8_t b, uint8_t a);
 
 int64_t sharpe_init(void) {
     return SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
@@ -118,6 +129,62 @@ int64_t sharpe_get_error(char *buf, int64_t len) {
     strncpy(buf, err, (size_t)(len - 1));
     buf[len - 1] = '\0';
     return 1;
+}
+
+/* Font subsystem lifecycle. Call after sharpe.init(), before loading fonts. */
+int64_t sharpe_ttf_init(void) {
+    return TTF_Init();
+}
+
+void sharpe_ttf_quit(void) {
+    TTF_Quit();
+}
+
+void* sharpe_load_font(const char *path, int64_t point_size) {
+    if (!path || point_size <= 0) return NULL;
+    return (void*)TTF_OpenFont(path, (int)point_size);
+}
+
+void sharpe_close_font(void *font) {
+    if (font) TTF_CloseFont((TTF_Font*)font);
+}
+
+void sharpe_set_font_style(void *font, int64_t style) {
+    if (font) TTF_SetFontStyle((TTF_Font*)font, (int)style);
+}
+
+int64_t sharpe_text_width(void *font, const char *text) {
+    int w = 0, h = 0;
+    if (!font || !text || TTF_SizeUTF8((TTF_Font*)font, text, &w, &h) != 0) return -1;
+    return (int64_t)w;
+}
+
+int64_t sharpe_text_height(void *font, const char *text) {
+    int w = 0, h = 0;
+    if (!font || !text || TTF_SizeUTF8((TTF_Font*)font, text, &w, &h) != 0) return -1;
+    return (int64_t)h;
+}
+
+/* Draw UTF-8 text with SDL_ttf's blended renderer. x/y are the top-left. */
+int64_t sharpe_draw_text(void *renderer, void *font, const char *text, int64_t x, int64_t y, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+    if (!renderer || !font || !text) return -1;
+
+    SDL_Color color = {r, g, b, a};
+    SDL_Surface *surface = TTF_RenderUTF8_Blended((TTF_Font*)font, text, color);
+    if (!surface) return -1;
+
+    SDL_Texture *texture = SDL_CreateTextureFromSurface((SDL_Renderer*)renderer, surface);
+    if (!texture) {
+        SDL_FreeSurface(surface);
+        return -1;
+    }
+
+    SDL_Rect destination = {(int)x, (int)y, surface->w, surface->h};
+    int result = SDL_RenderCopy((SDL_Renderer*)renderer, texture, NULL, &destination);
+
+    SDL_DestroyTexture(texture);
+    SDL_FreeSurface(surface);
+    return (int64_t)result;
 }
 
 #endif

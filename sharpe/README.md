@@ -77,3 +77,56 @@ a baton string (`cstr("hello")` above).
 
 A runnable version lives in `examples/sharpe_window.bt`.
 
+
+
+## Fonts and text (SDL_ttf)
+
+SHARPE includes UTF-8 font rendering through SDL2_ttf. Install the SDL2_ttf
+runtime and development package in addition to SDL2. The module links
+`-lSDL2_ttf` automatically.
+
+```baton
+mod sharpe get-from "sharpe/sharpe.btl"
+mod s get-from "sharpe/constants.bt"
+
+fn main() -> i {
+    if sharpe.init() != 0 { return 1 }
+    if sharpe.ttf_init() != 0 {
+        sharpe.quit()
+        return 1
+    }
+
+    *i local win = sharpe.create_window(cstr("Font test"), s.WINDOWPOS_UNDEFINED, s.WINDOWPOS_UNDEFINED, 800, 600, s.WINDOW_SHOWN)
+    *i local ren = sharpe.create_renderer(win, -1, s.RENDERER_ACCELERATED)
+    *i local font = sharpe.load_font(cstr("assets/DejaVuSans.ttf"), 28)
+
+    if isnull(font) {
+        sharpe.ttf_quit()
+        sharpe.quit()
+        return 1
+    }
+
+    sharpe.set_draw_color(ren, 24, 28, 36, 255)
+    sharpe.render_clear(ren)
+    sharpe.draw_text(ren, font, cstr("Hello, BATON! — café"), 32, 32, 240, 240, 255, 255)
+    sharpe.render_present(ren)
+    sharpe.delay(2000)
+
+    sharpe.close_font(font)
+    sharpe.ttf_quit()
+    sharpe.quit()
+    return 0
+}
+```
+
+Font API:
+
+- `sharpe.ttf_init()` / `sharpe.ttf_quit()` — initialize and shut down SDL_ttf.
+- `sharpe.load_font(cstr(path), point_size)` — returns an opaque font handle; check it with `isnull`.
+- `sharpe.close_font(font)` — release a loaded font.
+- `sharpe.draw_text(renderer, font, cstr(text), x, y, r, g, b, a)` — render UTF-8 text at its top-left corner. Returns SDL's result (`0` on success, `-1` on failure).
+- `sharpe.text_width(font, cstr(text))` / `sharpe.text_height(...)` — measure rendered text in pixels (`-1` on failure).
+- `sharpe.set_font_style(font, style)` — use `s.TTF_STYLE_NORMAL`, `BOLD`, `ITALIC`, `UNDERLINE`, or `STRIKETHROUGH` (flags may be combined with `|`).
+
+Keep font files in your game's assets directory and load them by path. Close
+fonts before `sharpe.ttf_quit()`; call `sharpe.ttf_quit()` before `sharpe.quit()`.

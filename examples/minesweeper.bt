@@ -1,0 +1,263 @@
+mod sharpe get-from "../sharpe/sharpe.btl"
+mod s get-from "../sharpe/constants.bt"
+
+-- BATON Minesweeper
+-- 10x10 board, 15 mines. Left click reveals; right click flags.
+-- R restarts; Escape exits.
+
+i const BOARD_W = 10
+i const BOARD_H = 10
+i const CELL = 42
+i const BOARD_X = 90
+i const BOARD_Y = 112
+i const MINE_TOTAL = 15
+
+b[100] local mines
+b[100] local revealed
+b[100] local flagged
+i[100] local adjacent
+
+i local game_state = 0 -- 0 playing, 1 won, 2 lost
+b local generated = false
+i local flags_used = 0
+i local safe_revealed = 0
+i local seed = 7919
+
+*i local ren
+
+fn index_of(i x, i y) -> i {
+    return y * BOARD_W + x
+}
+
+fn random_next() -> i {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff
+    return seed
+}
+
+fn reset_game() {
+    for n in 0..100 {
+        mines[n] = false
+        revealed[n] = false
+        flagged[n] = false
+        adjacent[n] = 0
+    }
+    game_state = 0
+    generated = false
+    flags_used = 0
+    safe_revealed = 0
+}
+
+fn generate_board(i safe_x, i safe_y) {
+    i local placed = 0
+    while placed < MINE_TOTAL {
+        i local pos = random_next() % 100
+        i local x = pos % BOARD_W
+        i local y = pos / BOARD_W
+        if (x != safe_x or y != safe_y) and not mines[pos] {
+            mines[pos] = true
+            placed += 1
+        }
+    }
+
+    for y in 0..BOARD_H {
+        for x in 0..BOARD_W {
+            i local total = 0
+            for dy in -1..=1 {
+                for dx in -1..=1 {
+                    i local nx = x + dx
+                    i local ny = y + dy
+                    if nx >= 0 and nx < BOARD_W and ny >= 0 and ny < BOARD_H {
+                        if mines[index_of(nx, ny)] { total += 1 }
+                    }
+                }
+            }
+            adjacent[index_of(x, y)] = total
+        }
+    }
+    generated = true
+}
+
+fn reveal_cell(i x, i y) {
+    if x < 0 or x >= BOARD_W or y < 0 or y >= BOARD_H { return }
+    i local pos = index_of(x, y)
+    if revealed[pos] or flagged[pos] or game_state != 0 { return }
+    if not generated { generate_board(x, y) }
+    if mines[pos] {
+        game_state = 2
+        for n in 0..100 {
+            if mines[n] { revealed[n] = true }
+        }
+        return
+    }
+    revealed[pos] = true
+    safe_revealed += 1
+    if adjacent[pos] == 0 {
+        for dy in -1..=1 {
+            for dx in -1..=1 {
+                if dx != 0 or dy != 0 {
+                    reveal_cell(x + dx, y + dy)
+                }
+            }
+        }
+    }
+    if safe_revealed == 85 { game_state = 1 }
+}
+
+fn toggle_flag(i x, i y) {
+    if x < 0 or x >= BOARD_W or y < 0 or y >= BOARD_H or game_state != 0 { return }
+    i local pos = index_of(x, y)
+    if revealed[pos] { return }
+    if flagged[pos] {
+        flagged[pos] = false
+        flags_used -= 1
+    } else {
+        if flags_used < MINE_TOTAL {
+            flagged[pos] = true
+            flags_used += 1
+        }
+    }
+}
+
+fn draw_digit(i digit, i x, i y, i scale) {
+    i local glyph = 0
+    match digit {
+        0 { glyph = 15623448110 }
+        1 { glyph = 4701950094 }
+        2 { glyph = 15603929375 }
+        3 { glyph = 32247317566 }
+        4 { glyph = 2359917634 }
+        5 { glyph = 33840628798 }
+        6 { glyph = 15587034670 }
+        7 { glyph = 33321787656 }
+        8 { glyph = 15621113390 }
+        9 { glyph = 15621129262 }
+        else { glyph = 0 }
+    }
+    for p in 0..35 {
+        i local bit = 34 - p
+        if (glyph & (1 << bit)) != 0 {
+            sharpe.fill_rect(ren, x + (p % 5) * scale, y + (p / 5) * scale, scale, scale)
+        }
+    }
+}
+
+fn draw_number(i value, i x, i y, i scale) {
+    i local tens = value / 10
+    i local ones = value % 10
+    draw_digit(tens, x, y, scale)
+    draw_digit(ones, x + 6 * scale, y, scale)
+}
+
+fn draw_board() {
+    sharpe.set_draw_color(ren, 22, 27, 38, 255)
+    sharpe.render_clear(ren)
+
+    -- Header panel and mine counter.
+    sharpe.set_draw_color(ren, 43, 52, 69, 255)
+    sharpe.fill_rect(ren, BOARD_X, 28, 420, 62)
+    sharpe.set_draw_color(ren, 220, 75, 75, 255)
+    sharpe.fill_rect(ren, BOARD_X + 14, 43, 30, 30)
+    sharpe.set_draw_color(ren, 245, 245, 245, 255)
+    sharpe.draw_line(ren, BOARD_X + 21, 65, BOARD_X + 21, 49)
+    sharpe.draw_line(ren, BOARD_X + 21, 49, BOARD_X + 39, 55)
+    sharpe.draw_line(ren, BOARD_X + 39, 55, BOARD_X + 21, 61)
+    sharpe.set_draw_color(ren, 35, 42, 56, 255)
+    sharpe.fill_rect(ren, BOARD_X + 55, 42, 55, 32)
+    sharpe.set_draw_color(ren, 245, 245, 245, 255)
+    draw_number(MINE_TOTAL - flags_used, BOARD_X + 66, 48, 2)
+
+    -- Board tiles.
+    for y in 0..BOARD_H {
+        for x in 0..BOARD_W {
+            i local pos = index_of(x, y)
+            i local px = BOARD_X + x * CELL
+            i local py = BOARD_Y + y * CELL
+            if revealed[pos] {
+                sharpe.set_draw_color(ren, 183, 193, 207, 255)
+                sharpe.fill_rect(ren, px, py, CELL - 2, CELL - 2)
+                if mines[pos] {
+                    sharpe.set_draw_color(ren, 210, 55, 65, 255)
+                    sharpe.fill_rect(ren, px + 12, py + 12, 16, 16)
+                } elf adjacent[pos] > 0 {
+                    match adjacent[pos] {
+                        1 { sharpe.set_draw_color(ren, 50, 100, 220, 255) }
+                        2 { sharpe.set_draw_color(ren, 35, 145, 75, 255) }
+                        3 { sharpe.set_draw_color(ren, 205, 55, 55, 255) }
+                        4 { sharpe.set_draw_color(ren, 90, 65, 180, 255) }
+                        else { sharpe.set_draw_color(ren, 45, 55, 70, 255) }
+                    }
+                    draw_digit(adjacent[pos], px + 16, py + 12, 2)
+                }
+            } else {
+                sharpe.set_draw_color(ren, 75, 91, 116, 255)
+                sharpe.fill_rect(ren, px, py, CELL - 2, CELL - 2)
+                sharpe.set_draw_color(ren, 102, 121, 148, 255)
+                sharpe.draw_line(ren, px + 2, py + 2, px + CELL - 5, py + 2)
+                sharpe.draw_line(ren, px + 2, py + 2, px + 2, py + CELL - 5)
+                if flagged[pos] {
+                    sharpe.set_draw_color(ren, 230, 75, 75, 255)
+                    sharpe.fill_rect(ren, px + 12, py + 10, 15, 10)
+                    sharpe.set_draw_color(ren, 245, 245, 245, 255)
+                    sharpe.fill_rect(ren, px + 11, py + 10, 3, 23)
+                }
+            }
+        }
+    }
+
+    -- Footer status bar.
+    sharpe.set_draw_color(ren, 43, 52, 69, 255)
+    sharpe.fill_rect(ren, BOARD_X, 540, 420, 54)
+    if game_state == 0 {
+        sharpe.set_draw_color(ren, 80, 190, 135, 255)
+        sharpe.fill_rect(ren, BOARD_X + 14, 552, 18, 18)
+    } elf game_state == 1 {
+        sharpe.set_draw_color(ren, 80, 210, 125, 255)
+        sharpe.fill_rect(ren, BOARD_X + 14, 552, 30, 18)
+    } else {
+        sharpe.set_draw_color(ren, 225, 65, 75, 255)
+        sharpe.fill_rect(ren, BOARD_X + 14, 552, 30, 18)
+    }
+    sharpe.set_draw_color(ren, 245, 245, 245, 255)
+    draw_number(flags_used, BOARD_X + 60, 551, 2)
+    sharpe.render_present(ren)
+}
+
+fn main() -> i {
+    if sharpe.init() != 0 { return 1 }
+    *i local win = sharpe.create_window(cstr("BATON Minesweeper"), s.WINDOWPOS_UNDEFINED, s.WINDOWPOS_UNDEFINED, 600, 620, s.WINDOW_SHOWN)
+    if isnull(win) { sharpe.quit(); return 1 }
+    *i local renderer = sharpe.create_renderer(win, -1, s.RENDERER_ACCELERATED)
+    if isnull(renderer) { sharpe.quit(); return 1 }
+    ren = renderer
+    reset_game()
+
+    i local running = 1
+    i local ev = 0
+    i local key = 0
+    i local mx = 0
+    i local my = 0
+    i local btn = 0
+    i local xr = 0
+    i local yr = 0
+    while running == 1 {
+        while sharpe.poll_event(&ev, &key, &mx, &my, &btn, &xr, &yr) == 1 {
+            if ev == s.QUIT { running = 0 }
+            if ev == s.KEYDOWN {
+                if key == s.KEY_ESCAPE { running = 0 }
+                if key == 114 { reset_game() }
+            }
+            if ev == s.MOUSEBUTTONDOWN {
+                i local gx = (mx - BOARD_X) / CELL
+                i local gy = (my - BOARD_Y) / CELL
+                if mx >= BOARD_X and mx < BOARD_X + BOARD_W * CELL and my >= BOARD_Y and my < BOARD_Y + BOARD_H * CELL {
+                    if btn == s.BUTTON_LEFT { reveal_cell(gx, gy) }
+                    if btn == s.BUTTON_RIGHT { toggle_flag(gx, gy) }
+                }
+            }
+        }
+        draw_board()
+        sharpe.delay(16)
+    }
+    sharpe.quit()
+    return 0
+}
